@@ -1,0 +1,72 @@
+replicaCount: 1
+strategyType: Recreate
+
+image:
+  repository: registry.k8s.io/sig-storage/nfs-subdir-external-provisioner
+  tag: v4.0.2
+  pullPolicy: IfNotPresent
+
+nfs:
+  server: CHANGE_ME_NFS_SERVER_IP  # e.g., 192.168.1.10
+  path: CHANGE_ME_NFS_EXPORT_PATH  # e.g., /mnt/user/k8s-data
+  mountOptions: []
+  volumeName: nfs-subdir-external-provisioner-root
+  # Reclaim policy for the main nfs volume
+  reclaimPolicy: Retain
+
+# For creating the StorageClass automatically:
+storageClass:
+  create: true
+
+  # Set StorageClass as the default StorageClass
+  defaultClass: false
+
+  # Set a StorageClass name
+  name: nfs-client
+
+  # Allow volume to be expanded dynamically
+  allowVolumeExpansion: true
+
+  # Method used to reclaim an obsoleted volume
+  reclaimPolicy: Retain
+
+  # When set to false your PVs will not be archived by the provisioner upon deletion of the PVC.
+  archiveOnDelete: true
+
+  # Set access mode - ReadWriteOnce, ReadOnlyMany or ReadWriteMany
+  accessModes: ReadWriteMany
+
+  # Set volume binding mode - Immediate or WaitForFirstConsumer
+  volumeBindingMode: Immediate
+
+  # Storage class annotations
+  annotations: {}
+
+leaderElection:
+  enabled: true
+
+rbac:
+  create: true
+
+podSecurityPolicy:
+  enabled: false
+
+serviceAccount:
+  create: true
+  annotations: {}
+
+resources: {}
+  # limits:
+  #  cpu: 100m
+  #  memory: 128Mi
+  # requests:
+  #  cpu: 100m
+  #  memory: 128Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+podDisruptionBudget:
+  enabled: false
+  maxUnavailable: 1
