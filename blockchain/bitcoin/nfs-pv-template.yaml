@@ -1,0 +1,86 @@
+# NFS PersistentVolume and PersistentVolumeClaim Templates
+#
+# Use these templates for storing Bitcoin Stack data on NFS.
+# This is recommended for large blockchain data (500GB+ for Bitcoin, 1.2TB+ for Electrs).
+#
+# Usage:
+# 1. Copy this file: cp nfs-pv-template.yaml nfs-pv.yaml
+# 2. Update the NFS server IPs and paths for your environment
+# 3. Apply: kubectl apply -f nfs-pv.yaml
+# 4. Update values.yaml to use the PVC names:
+#    - bitcoind.persistence.existingClaim: "bitcoin-nfs-pvc"
+#    - electrs.persistence.existingClaim: "electrs-nfs-pvc"
+
+---
+# Bitcoin Core Storage (Required)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: bitcoin-nfs-pv
+spec:
+  capacity:
+    storage: 500Gi
+  accessModes:
+    - ReadWriteMany  # NFS supports multiple readers/writers
+  persistentVolumeReclaimPolicy: Retain  # Keep data when PVC is deleted
+  nfs:
+    server: 10.0.0.2  # REPLACE WITH YOUR NFS SERVER IP
+    path: /mnt/user/bitcoin  # REPLACE WITH YOUR NFS PATH
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - timeo=600
+    - retrans=2
+    - _netdev
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bitcoin-nfs-pvc
+  namespace: bitcoin
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""  # Empty to bind to specific PV
+  resources:
+    requests:
+      storage: 500Gi
+  volumeName: bitcoin-nfs-pv  # Bind to the PV created above
+
+---
+# Electrs Storage (Optional - only needed if electrs.enabled: true)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: electrs-nfs-pv
+spec:
+  capacity:
+    storage: 1200Gi  # Electrs requires ~1.2TB for mainnet
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: 10.0.0.7  # REPLACE WITH YOUR NFS SERVER IP
+    path: /electrs  # REPLACE WITH YOUR NFS PATH
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - timeo=600
+    - retrans=2
+    - _netdev
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: electrs-nfs-pvc
+  namespace: bitcoin
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 1200Gi
+  volumeName: electrs-nfs-pv

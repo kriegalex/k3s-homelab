@@ -1,0 +1,293 @@
+# Bitcoin Stack Helm Chart Values Template
+#
+# This file provides a starting template for deploying the full Bitcoin Stack.
+# Copy this to custom-values.yaml and customize for your deployment.
+#
+# Chart: k8s-charts/bitcoin-stack (version 1.0.0)
+# Repository: https://kriegalex.github.io/k8s-charts/
+#
+# Components:
+# - Bitcoin Core (bitcoind) - Required
+# - Electrs (Electrum server) - Optional
+# - Mempool Explorer - Optional
+
+## Bitcoin Core Image
+image:
+  repository: blockstream/bitcoind
+  pullPolicy: IfNotPresent
+  tag: ""  # Empty will use chart default
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+## Bitcoin Core Configuration
+bitcoind:
+  dataDir: "/root/.bitcoin"
+  configFile: "/root/.bitcoin/bitcoin.conf"
+  cookieFile: "/root/.bitcoin/.cookie"
+
+  # Network selection
+  testnet: 0  # Set to 1 for testnet
+  regtest: 0  # Set to 1 for regtest
+  # Default (both 0) is mainnet
+
+  # bitcoin.conf file content
+  config: |
+    server=1
+    txindex=1
+    chain=main  # Options: main, test, regtest, signet
+
+    # RPC configuration
+    rpcuser=bitcoinrpc
+    rpcpassword=CHANGE_ME  # Generate with: openssl rand -base64 24
+    rpcallowip=10.0.0.0/8
+    whitelist=10.0.0.0/8
+    rpcbind=0.0.0.0
+
+    # Performance tuning
+    dbcache=450
+    maxorphantx=100
+    maxmempool=300
+    nodebuglogfile=1
+
+    # Optional: Enable pruning to save space
+    # prune=10240  # Keep only 10GB of blocks (minimum ~550)
+
+  # RPC settings
+  rpc:
+    rpcPort: 8332
+    port: 8333
+
+  # Persistent storage configuration for blockchain data
+  persistence:
+    enabled: true
+    # Option 1: Use existing claim (NFS or other)
+    existingClaim: "bitcoin-nfs-pvc"
+    # Option 2: Create new PVC with storage class
+    storageClass: ""  # longhorn
+    size: 500Gi  # Full node requires 500GB+, pruned ~50GB
+    accessModes:
+      - ReadWriteOnce  # Use ReadWriteMany for NFS
+    annotations: {}
+
+## Electrs (Electrum Rust Server) Configuration - OPTIONAL
+electrs:
+  enabled: false  # Set to true to enable Electrum server
+  image:
+    repository: mempool/electrs
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 4Gi
+    limits:
+      cpu: 2000m
+      memory: 8Gi
+
+  config:
+    dbDir: "/electrs"
+    # These will be set automatically by the chart:
+    # bitcoinRpcAddr: "<release-name>-bitcoind:8332"
+    electrumRpcAddr: "0.0.0.0:50001"
+    httpAddr: "0.0.0.0:3000"
+    monitoringAddr: "0.0.0.0:4224"
+    extraArgs: []  # e.g., ["--lightmode"]
+
+  # bitcoindDataClaimName: Will be set automatically to bitcoin's PVC
+
+  persistence:
+    enabled: true
+    # Option 1: Use existing claim
+    existingClaim: "electrs-nfs-pvc"
+    # Option 2: Create new PVC
+    size: 1200Gi  # Electrs index requires ~1.2TB for mainnet
+    storageClass: "" # longhorn
+    accessModes:
+      - ReadWriteOnce  # Use ReadWriteMany for NFS
+
+  service:
+    type: ClusterIP
+    rpcPort: 50001
+    httpPort: 3000
+    monitoringPort: 4224
+
+## Mempool Explorer Configuration - OPTIONAL
+mempool:
+  enabled: false  # Set to true to enable Mempool explorer
+
+  # Frontend configuration
+  frontend:
+    image:
+      repository: mempool/frontend
+      tag: v2.5.1
+      pullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  # Backend configuration
+  backend:
+    image:
+      repository: mempool/backend
+      tag: v2.5.1
+      pullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    config:
+      backend: "esplora"  # Options: electrum, esplora
+      network: "mainnet"  # Will be set based on bitcoind.testnet/regtest
+
+  # Database (MariaDB) configuration
+  db:
+    image:
+      repository: mariadb
+      tag: 10.5.21
+      pullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    auth:
+      # WARNING: Passwords are stored in plain text in values file
+      # The chart does not yet support existingSecret for database credentials
+      # TODO: Encrypt values file or use external secrets management
+      database: "mempool"
+      username: "mempool"
+      password: "CHANGE_ME"  # Generate with: openssl rand -base64 32
+      rootPassword: "CHANGE_ME"  # Generate with: openssl rand -base64 32
+    persistence:
+      enabled: false  # Set to true for persistent mempool data
+      size: 10Gi
+      storageClass: ""  # Use default or specify
+      accessModes:
+        - ReadWriteOnce
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 80
+
+  # Ingress configuration
+  ingress:
+    enabled: false  # Set to true to expose via ingress
+    className: "nginx"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - host: mempool.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: mempool-tls-secret
+        hosts:
+          - mempool.example.com
+
+## Ingress Configuration for Bitcoin RPC - OPTIONAL
+ingress:
+  enabled: false  # Set to true to expose Bitcoin RPC via HTTPS
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    # Consider adding basic auth for RPC access:
+    # nginx.ingress.kubernetes.io/auth-type: basic
+    # nginx.ingress.kubernetes.io/auth-secret: bitcoin-basic-auth
+  hosts:
+    - host: bitcoin.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: bitcoin-tls-secret
+      hosts:
+        - bitcoin.example.com
+
+## Service Configuration
+service:
+  type: ClusterIP  # Options: ClusterIP, LoadBalancer, NodePort
+  # Use LoadBalancer for better P2P connectivity (allows inbound connections)
+
+## Resource Configuration for Bitcoin Core
+resources:
+  requests:
+    memory: 2Gi
+    cpu: 500m
+  limits:
+    memory: 8Gi
+    cpu: 2000m
+
+## Node Selector, Tolerations, and Affinity
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+## Service Account Configuration
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+## Security Contexts
+podSecurityContext:
+  enabled: false
+  fsGroup: 1000
+
+securityContext:
+  enabled: false
+  runAsNonRoot: true
+  runAsUser: 1000
+  readOnlyRootFilesystem: false
+
+## Pod Probes Configuration
+probes:
+  startup:
+    enabled: false
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+
+  liveness:
+    enabled: false
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readiness:
+    enabled: false
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+
+## Network Policy Configuration
+networkPolicy:
+  enabled: false  # Set to true to enable network policies
+  rpcAllowFrom: []  # List of selectors for RPC access
+  p2pAllowFrom: []  # List of selectors for P2P access
+  allowIngressController: false  # Allow ingress controller access
+
+## High Availability Configuration
+podDisruptionBudget:
+  enabled: false  # Set to true for HA deployments
+  minAvailable: 1
