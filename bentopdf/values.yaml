@@ -1,0 +1,17 @@
+image:
+  repository: ghcr.io/alam00000/bentopdf-simple
+  pullPolicy: Always
+  tag: latest
+
+ingress:
+  enabled: true
+  className: nginx
+  url: "bentopdf.local"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 50Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
