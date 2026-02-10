@@ -1,0 +1,98 @@
+# CloudNativePG Cluster Example
+#
+# This manifest creates a PostgreSQL cluster with 3 instances (1 primary + 2 replicas).
+# The operator automatically handles failover, backups, and high availability.
+#
+# IMPORTANT: This is an EXAMPLE. Copy and customize for your application.
+#
+# Documentation: https://cloudnative-pg.io/documentation/current/
+
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: example-cluster
+  namespace: default  # Change to your application namespace
+spec:
+  # Number of PostgreSQL instances
+  # 1 = single instance, 3+ = HA with automatic failover
+  instances: 3
+
+  # PostgreSQL version
+  # Options: 15, 16, 17 (latest stable)
+  # The operator uses official PostgreSQL images by default
+  # imageName: "ghcr.io/cloudnative-pg/postgresql:16"  # Optional: override image
+
+  # Bootstrap configuration (for new clusters)
+  bootstrap:
+    initdb:
+      database: myapp_db
+      owner: myapp_user
+      secret:
+        name: example-db-credentials  # Must exist before applying this
+
+  # Storage configuration
+  storage:
+    size: 10Gi
+    storageClass: longhorn  # Change to your storage class (local-path, nfs-client, etc.)
+    # Optional: Configure PVC access modes
+    # accessModes:
+    #   - ReadWriteOnce
+
+  # Resource requirements
+  resources:
+    requests:
+      memory: "500Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+
+  # Optional: PostgreSQL configuration
+  postgresql:
+    parameters:
+      # Tune these based on your workload
+      max_connections: "100"
+      shared_buffers: "256MB"
+      effective_cache_size: "1GB"
+      work_mem: "4MB"
+
+  # Optional: Monitoring integration
+  monitoring:
+    enabled: true
+    podMonitorEnabled: true  # Requires Prometheus Operator
+
+  # Optional: Backup configuration (requires S3-compatible storage)
+  # backup:
+  #   barmanObjectStore:
+  #     destinationPath: s3://my-bucket/postgres-backups
+  #     endpointURL: https://s3.amazonaws.com
+  #     s3Credentials:
+  #       accessKeyId:
+  #         name: backup-s3-credentials
+  #         key: ACCESS_KEY_ID
+  #       secretAccessKey:
+  #         name: backup-s3-credentials
+  #         key: SECRET_ACCESS_KEY
+  #     wal:
+  #       compression: gzip
+  #   retentionPolicy: "30d"
+
+---
+# Database Credentials Secret
+# IMPORTANT: Create this secret BEFORE applying the Cluster manifest
+#
+# kubectl create secret generic example-db-credentials \
+#   --from-literal=username=myapp_user \
+#   --from-literal=password=$(openssl rand -base64 32) \
+#   --namespace=default
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: example-db-credentials
+  namespace: default
+type: kubernetes.io/basic-auth
+stringData:
+  username: "myapp_user"
+  password: "CHANGE_ME_DB_PASSWORD"  # Use: openssl rand -base64 32

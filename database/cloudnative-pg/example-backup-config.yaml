@@ -1,0 +1,169 @@
+# CloudNativePG Backup Configuration Example
+#
+# This example shows how to configure automated backups to S3-compatible storage.
+# Backups are managed by the operator using Barman (PostgreSQL backup tool).
+#
+# Documentation: https://cloudnative-pg.io/documentation/current/backup_recovery/
+
+---
+# S3 Credentials Secret
+# Create this before enabling backups in your Cluster
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backup-s3-credentials
+  namespace: default  # Match your cluster namespace
+type: Opaque
+stringData:
+  ACCESS_KEY_ID: "CHANGE_ME_S3_ACCESS_KEY"
+  SECRET_ACCESS_KEY: "CHANGE_ME_S3_SECRET_KEY"
+
+---
+# Cluster with Backup Configuration
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: example-cluster-with-backup
+  namespace: default
+spec:
+  instances: 3
+
+  bootstrap:
+    initdb:
+      database: myapp_db
+      owner: myapp_user
+      secret:
+        name: example-db-credentials
+
+  storage:
+    size: 10Gi
+    storageClass: longhorn
+
+  # Backup configuration
+  backup:
+    # Barman Object Store configuration
+    barmanObjectStore:
+      # S3 bucket path
+      destinationPath: s3://my-postgres-backups/example-cluster
+
+      # S3 endpoint (adjust for your provider)
+      # AWS: https://s3.amazonaws.com
+      # MinIO: http://minio.default.svc.cluster.local:9000
+      # Wasabi: https://s3.us-west-1.wasabisys.com
+      endpointURL: https://s3.amazonaws.com
+
+      # S3 credentials reference
+      s3Credentials:
+        accessKeyId:
+          name: backup-s3-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: backup-s3-credentials
+          key: SECRET_ACCESS_KEY
+
+      # WAL (Write-Ahead Log) configuration
+      wal:
+        compression: gzip  # Compress WAL files
+        maxParallel: 2     # Parallel upload threads
+
+      # Data backup compression
+      data:
+        compression: gzip
+        jobs: 2  # Parallel backup jobs
+
+    # Backup retention policy
+    retentionPolicy: "30d"  # Keep backups for 30 days
+
+    # Volume snapshot configuration (optional, for faster backups)
+    # volumeSnapshot:
+    #   className: "longhorn-snapshot"
+    #   online: true  # Take snapshot while cluster is running
+
+  # Scheduled backups
+  # Note: Base backup schedule is defined separately (see ScheduledBackup below)
+
+---
+# Scheduled Backup
+# Automatically trigger backups on a schedule
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: example-cluster-daily-backup
+  namespace: default
+spec:
+  # Schedule in cron format
+  # This example: daily at 2:30 AM
+  schedule: "30 2 * * *"
+
+  # Backup method
+  backupOwnerReference: self
+
+  # Target cluster
+  cluster:
+    name: example-cluster-with-backup
+
+  # Backup method
+  method: barmanObjectStore  # Use Barman for S3 backups
+  # method: volumeSnapshot   # Alternative: use volume snapshots
+
+---
+# Manual Backup (On-Demand)
+# Apply this to trigger an immediate backup
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: example-cluster-manual-backup
+  namespace: default
+spec:
+  cluster:
+    name: example-cluster-with-backup
+  method: barmanObjectStore
+
+---
+# Restore from Backup Example
+# Use this to create a new cluster from an existing backup
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: example-cluster-restored
+  namespace: default
+spec:
+  instances: 3
+
+  # Bootstrap from backup
+  bootstrap:
+    recovery:
+      # Restore from S3 backup
+      source: example-cluster-with-backup
+
+      # Optional: Point-in-time recovery
+      # recoveryTarget:
+      #   targetTime: "2024-02-08 10:00:00"
+
+  # External clusters (source for restore)
+  externalClusters:
+    - name: example-cluster-with-backup
+      barmanObjectStore:
+        destinationPath: s3://my-postgres-backups/example-cluster
+        endpointURL: https://s3.amazonaws.com
+        s3Credentials:
+          accessKeyId:
+            name: backup-s3-credentials
+            key: ACCESS_KEY_ID
+          secretAccessKey:
+            name: backup-s3-credentials
+            key: SECRET_ACCESS_KEY
+        wal:
+          maxParallel: 2
+
+  storage:
+    size: 10Gi
+    storageClass: longhorn
+
+  resources:
+    requests:
+      memory: "500Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
