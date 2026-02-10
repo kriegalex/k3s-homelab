@@ -1,0 +1,207 @@
+# k8up Restore Example
+#
+# Restore backups from S3-compatible storage to PVCs.
+# IMPORTANT: Scale down applications before restoring to avoid data corruption.
+#
+# Documentation: https://k8up.io/k8up/2.x/how-tos/restore.html
+
+---
+# Simple PVC Restore
+# Restores the latest backup to a PVC
+apiVersion: k8up.io/v1
+kind: Restore
+metadata:
+  name: restore-pvc
+  namespace: default
+spec:
+  # Backend configuration (must match backup backend)
+  backend:
+    repoPasswordSecretRef:
+      name: backup-repo
+      key: password
+    s3:
+      endpoint: "http://minio.minio.svc.cluster.local:9000"
+      bucket: "my-pvc-backups"
+      accessKeyIDSecretRef:
+        name: minio-credentials
+        key: username
+      secretAccessKeySecretRef:
+        name: minio-credentials
+        key: password
+
+  # Restore method
+  restoreMethod:
+    folder:
+      claimName: "my-app-data"  # Target PVC to restore to
+
+  # Pod security context (must match backup user)
+  podSecurityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    fsGroupChangePolicy: OnRootMismatch
+
+  # Optional: Restore specific snapshot
+  # snapshot: "abcd1234"  # Get snapshot ID from: restic snapshots
+
+---
+# PostgreSQL Database Restore
+# Restores database backup and applies SQL dump
+#
+# STEPS:
+# 1. Scale down application
+# 2. Restore SQL dump file to PVC
+# 3. Manually apply SQL dump to database
+# 4. Scale up application
+apiVersion: k8up.io/v1
+kind: Restore
+metadata:
+  name: restore-postgres
+  namespace: default
+spec:
+  backend:
+    repoPasswordSecretRef:
+      name: backup-repo
+      key: password
+    s3:
+      endpoint: "http://minio.minio.svc.cluster.local:9000"
+      bucket: "postgres-backups"
+      accessKeyIDSecretRef:
+        name: minio-credentials
+        key: username
+      secretAccessKeySecretRef:
+        name: minio-credentials
+        key: password
+
+  restoreMethod:
+    folder:
+      claimName: "postgres-restore-temp"  # Temporary PVC for SQL dump
+
+  podSecurityContext:
+    runAsUser: 999
+
+  # Restore specific snapshot
+  # snapshot: "latest"
+
+---
+# Point-in-Time Restore
+# Restore to a specific snapshot ID
+#
+# First, list available snapshots:
+# kubectl run restic-check --rm -it --image=restic/restic --restart=Never -- \
+#   -r s3:http://minio.minio.svc.cluster.local:9000/my-pvc-backups snapshots
+#
+# Then restore specific snapshot:
+apiVersion: k8up.io/v1
+kind: Restore
+metadata:
+  name: restore-specific-snapshot
+  namespace: default
+spec:
+  # Snapshot ID from restic snapshots command
+  snapshot: "abcd1234567890"
+
+  backend:
+    repoPasswordSecretRef:
+      name: backup-repo
+      key: password
+    s3:
+      endpoint: "http://minio.minio.svc.cluster.local:9000"
+      bucket: "my-pvc-backups"
+      accessKeyIDSecretRef:
+        name: minio-credentials
+        key: username
+      secretAccessKeySecretRef:
+        name: minio-credentials
+        key: password
+
+  restoreMethod:
+    folder:
+      claimName: "my-app-data"
+
+  podSecurityContext:
+    runAsUser: 1000
+    fsGroup: 1000
+
+---
+# Restore to New PVC
+# Create new PVC and restore backup to it (useful for testing)
+#
+# First, create the target PVC:
+# kubectl apply -f - <<EOF
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: my-app-data-restored
+#   namespace: default
+# spec:
+#   accessModes:
+#     - ReadWriteOnce
+#   resources:
+#     requests:
+#       storage: 10Gi
+#   storageClassName: longhorn
+# EOF
+#
+# Then restore:
+apiVersion: k8up.io/v1
+kind: Restore
+metadata:
+  name: restore-to-new-pvc
+  namespace: default
+spec:
+  backend:
+    repoPasswordSecretRef:
+      name: backup-repo
+      key: password
+    s3:
+      endpoint: "http://minio.minio.svc.cluster.local:9000"
+      bucket: "my-pvc-backups"
+      accessKeyIDSecretRef:
+        name: minio-credentials
+        key: username
+      secretAccessKeySecretRef:
+        name: minio-credentials
+        key: password
+
+  restoreMethod:
+    folder:
+      claimName: "my-app-data-restored"  # New PVC
+
+  podSecurityContext:
+    runAsUser: 1000
+    fsGroup: 1000
+
+---
+# Restore with Filters
+# Restore only specific paths from backup
+apiVersion: k8up.io/v1
+kind: Restore
+metadata:
+  name: restore-filtered
+  namespace: default
+spec:
+  # Restic restore filters
+  restoreFilter: "data/uploads/*"  # Only restore uploads directory
+
+  backend:
+    repoPasswordSecretRef:
+      name: backup-repo
+      key: password
+    s3:
+      endpoint: "http://minio.minio.svc.cluster.local:9000"
+      bucket: "my-pvc-backups"
+      accessKeyIDSecretRef:
+        name: minio-credentials
+        key: username
+      secretAccessKeySecretRef:
+        name: minio-credentials
+        key: password
+
+  restoreMethod:
+    folder:
+      claimName: "my-app-data"
+
+  podSecurityContext:
+    runAsUser: 1000
+    fsGroup: 1000

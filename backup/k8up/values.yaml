@@ -1,0 +1,41 @@
+# k8up Operator Custom Values
+#
+# k8up is a Kubernetes operator for backup and restore using Restic.
+# It provides automated backups to S3-compatible storage.
+#
+# Chart Repository: https://k8up-io.github.io/k8up
+# Chart Version: 4.8.3
+# Documentation: https://k8up.io/
+
+# Operator configuration
+k8up:
+  # Environment variables for the operator
+  envVars:
+    # Only backup resources with k8up.io/backup annotation
+    # Set to false to backup all PVCs automatically
+    - name: BACKUP_SKIP_WITHOUT_ANNOTATION
+      value: "true"
+
+  # Timezone for scheduled backups
+  timezone: "UTC"
+
+# Resource limits for operator pod
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+# Node affinity (optional)
+# affinity:
+#   nodeAffinity:
+#     preferredDuringSchedulingIgnoredDuringExecution:
+#       - weight: 100
+#         preference:
+#           matchExpressions:
+#             - key: kubernetes.io/hostname
+#               operator: In
+#               values:
+#                 - worker-node-1

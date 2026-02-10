@@ -1,0 +1,236 @@
+# k8up Scheduled Backup Example
+#
+# Schedule regular automated backups using cron syntax.
+# k8up will automatically create Backup jobs according to the schedule.
+#
+# Documentation: https://k8up.io/k8up/2.x/how-tos/schedules.html
+
+---
+# Daily PVC Backup Schedule
+# Backs up all annotated PVCs daily at 2:00 AM
+apiVersion: k8up.io/v1
+kind: Schedule
+metadata:
+  name: daily-pvc-backup
+  namespace: default
+spec:
+  # Backup schedule in cron format
+  # Format: "minute hour day month weekday"
+  # Examples:
+  #   "0 2 * * *"     - Daily at 2:00 AM
+  #   "0 */6 * * *"   - Every 6 hours
+  #   "0 2 * * 0"     - Weekly on Sunday at 2:00 AM
+  #   "0 2 1 * *"     - Monthly on 1st at 2:00 AM
+  backup:
+    schedule: "0 2 * * *"  # Daily at 2:00 AM
+
+    # Keep last 14 daily backups
+    keepJobs: 14
+
+    # Backend configuration
+    backend:
+      repoPasswordSecretRef:
+        name: backup-repo
+        key: password
+      s3:
+        endpoint: "http://minio.minio.svc.cluster.local:9000"
+        bucket: "scheduled-backups"
+        accessKeyIDSecretRef:
+          name: minio-credentials
+          key: username
+        secretAccessKeySecretRef:
+          name: minio-credentials
+          key: password
+
+    podSecurityContext:
+      runAsUser: 1000
+      fsGroup: 1000
+
+  # Prune old snapshots (cleanup)
+  prune:
+    schedule: "0 3 * * 0"  # Weekly on Sunday at 3:00 AM
+
+    # Retention policy
+    retention:
+      keepLast: 5        # Keep last 5 backups
+      keepDaily: 14      # Keep 14 daily backups
+      keepWeekly: 4      # Keep 4 weekly backups
+      keepMonthly: 12    # Keep 12 monthly backups
+      keepYearly: 2      # Keep 2 yearly backups
+
+    backend:
+      repoPasswordSecretRef:
+        name: backup-repo
+        key: password
+      s3:
+        endpoint: "http://minio.minio.svc.cluster.local:9000"
+        bucket: "scheduled-backups"
+        accessKeyIDSecretRef:
+          name: minio-credentials
+          key: username
+        secretAccessKeySecretRef:
+          name: minio-credentials
+          key: password
+
+  # Check backup integrity
+  check:
+    schedule: "0 4 * * 0"  # Weekly on Sunday at 4:00 AM
+
+    backend:
+      repoPasswordSecretRef:
+        name: backup-repo
+        key: password
+      s3:
+        endpoint: "http://minio.minio.svc.cluster.local:9000"
+        bucket: "scheduled-backups"
+        accessKeyIDSecretRef:
+          name: minio-credentials
+          key: username
+        secretAccessKeySecretRef:
+          name: minio-credentials
+          key: password
+
+---
+# Hourly PostgreSQL Backup Schedule
+# Backs up database every 6 hours
+apiVersion: k8up.io/v1
+kind: Schedule
+metadata:
+  name: postgres-backup-schedule
+  namespace: default
+spec:
+  backup:
+    schedule: "0 */6 * * *"  # Every 6 hours
+    keepJobs: 10
+
+    backend:
+      repoPasswordSecretRef:
+        name: backup-repo
+        key: password
+      s3:
+        endpoint: "http://minio.minio.svc.cluster.local:9000"
+        bucket: "postgres-scheduled"
+        accessKeyIDSecretRef:
+          name: minio-credentials
+          key: username
+        secretAccessKeySecretRef:
+          name: minio-credentials
+          key: password
+
+    podSecurityContext:
+      runAsUser: 999  # PostgreSQL user
+
+  # Prune weekly
+  prune:
+    schedule: "0 5 * * 0"
+
+    retention:
+      keepLast: 10
+      keepHourly: 24
+      keepDaily: 7
+      keepWeekly: 4
+
+    backend:
+      repoPasswordSecretRef:
+        name: backup-repo
+        key: password
+      s3:
+        endpoint: "http://minio.minio.svc.cluster.local:9000"
+        bucket: "postgres-scheduled"
+        accessKeyIDSecretRef:
+          name: minio-credentials
+          key: username
+        secretAccessKeySecretRef:
+          name: minio-credentials
+          key: password
+
+---
+# Multi-Application Schedule
+# Backup multiple applications with different schedules
+apiVersion: k8up.io/v1
+kind: Schedule
+metadata:
+  name: critical-apps-backup
+  namespace: production
+spec:
+  # Backup every 4 hours
+  backup:
+    schedule: "0 */4 * * *"
+    keepJobs: 20
+
+    # Tag backups for organization
+    tags:
+      - production
+      - critical
+
+    backend:
+      repoPasswordSecretRef:
+        name: backup-repo
+        key: password
+      s3:
+        endpoint: "https://s3.amazonaws.com"
+        bucket: "prod-backups"
+        accessKeyIDSecretRef:
+          name: minio-credentials
+          key: username
+        secretAccessKeySecretRef:
+          name: minio-credentials
+          key: password
+
+  # Prune daily
+  prune:
+    schedule: "0 1 * * *"
+
+    retention:
+      keepLast: 20
+      keepHourly: 48
+      keepDaily: 30
+      keepWeekly: 12
+      keepMonthly: 12
+      keepYearly: 5
+
+    backend:
+      repoPasswordSecretRef:
+        name: backup-repo
+        key: password
+      s3:
+        endpoint: "https://s3.amazonaws.com"
+        bucket: "prod-backups"
+        accessKeyIDSecretRef:
+          name: minio-credentials
+          key: username
+        secretAccessKeySecretRef:
+          name: minio-credentials
+          key: password
+
+  # Check weekly
+  check:
+    schedule: "0 6 * * 0"
+
+    backend:
+      repoPasswordSecretRef:
+        name: backup-repo
+        key: password
+      s3:
+        endpoint: "https://s3.amazonaws.com"
+        bucket: "prod-backups"
+        accessKeyIDSecretRef:
+          name: minio-credentials
+          key: username
+        secretAccessKeySecretRef:
+          name: minio-credentials
+          key: password
+
+---
+# Suspend a Schedule
+# To temporarily disable a schedule without deleting it
+# apiVersion: k8up.io/v1
+# kind: Schedule
+# metadata:
+#   name: daily-pvc-backup
+#   namespace: default
+# spec:
+#   suspend: true  # Add this line to suspend
+#   backup:
+#     schedule: "0 2 * * *"
+#     # ... rest of config
