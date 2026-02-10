@@ -1,0 +1,132 @@
+# Bluesky PDS Helm Chart Values
+#
+# Customized values for deployed Bluesky Personal Data Server
+#
+# Chart: nerkho/bluesky-pds (version 0.3.0)
+# Repository: https://charts.nerkho.ch
+
+## Replica Count
+replicaCount: 1
+
+## PDS Image
+image:
+  repository: ghcr.io/bluesky-social/pds
+  pullPolicy: IfNotPresent
+  tag: "0.4.67"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+## PDS Configuration
+pds:
+  config:
+    # CRITICAL: Your public hostname (FQDN)
+    # This is how your PDS will be identified on the AT Protocol network
+    hostname: bluesky.crypto.example.com
+
+    # Secrets configuration
+    secrets:
+      # Use existing Kubernetes secret (RECOMMENDED)
+      existingSecret: "bluesky-pds-secrets"  # See secrets-template.yaml
+
+    # Data directories
+    dataDir: "/pds"
+    blobstoreLocation: "/pds/blocks"
+
+    # AT Protocol network endpoints (usually no need to change)
+    didPlcUrl: "https://plc.directory"
+    bskyAppViewUrl: "https://api.bsky.app"
+    bskyAppViewDid: "did:web:api.bsky.app"
+    reportSvcUrl: "https://mod.bsky.app"
+    reportSvcDid: "did:plc:ar7c4by46qjdydhdevvrndac"
+    crawlers: "https://bsky.network"
+
+    # Email configuration
+    pdsEmailFromAddress: "noreply@homelab.example.com"
+
+  # Persistent storage configuration
+  dataStorage:
+    # Size of the PVC for user data
+    size: 50Gi  # Adjust based on expected users and content
+
+    # Mount path (should match dataDir above)
+    mountPath: "/pds"
+
+    # Storage class to use (leave null for default)
+    storageClass: "longhorn"
+
+    # Selector for persistent disk (advanced)
+    selector: null
+
+## Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+## Pod Annotations
+podAnnotations: {}
+
+## Security Contexts
+podSecurityContext:
+  fsGroup: 2000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+## Service Configuration
+service:
+  type: ClusterIP
+  port: 3000
+
+## Ingress Configuration
+# CRITICAL: Ingress with wildcard subdomain support is REQUIRED for PDS to work
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+  hosts:
+    # Main PDS endpoint
+    - host: bluesky.crypto.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+    # Wildcard subdomain for user handles (e.g., alice.bluesky.crypto.example.com)
+    - host: "*.bluesky.crypto.example.com"
+      paths:
+        - path: /
+          pathType: Prefix
+
+  # TLS configuration (REQUIRED for production)
+  tls:
+    - secretName: bluesky-pds-tls
+      hosts:
+        - bluesky.crypto.example.com
+        - "*.bluesky.crypto.example.com"
+
+## Resource Limits
+resources:
+  requests:
+    memory: 500Mi
+    cpu: 250m
+  limits:
+    memory: 4Gi
+    cpu: 1000m
+
+## Node Selector
+nodeSelector: {}
+
+## Tolerations
+tolerations: []
+
+## Affinity
+affinity: {}

@@ -1,0 +1,215 @@
+# -- Number of nostr-relay replicas
+replicaCount: 1
+
+image:
+  # -- Nostr strfry Docker image repository
+  repository: dockurr/strfry
+  # -- Nostr relay Docker image pull policy
+  pullPolicy: IfNotPresent
+  # -- Overrides the image tag. Default is the chart appVersion
+  tag: ""
+
+# -- Specify imagePullSecrets if your Docker repository requires authentication
+imagePullSecrets: []
+# -- String to partially override nostr-relay.fullname template
+nameOverride: ""
+# -- String to fully override nostr-relay.fullname template
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Specifies whether a service account should be created
+  create: false
+  # -- The name of the service account to use. If not set and create is true, a name is generated using the fullname template.
+  name: ""
+
+# -- Annotations to be added to the pod
+podAnnotations: {}
+
+# Security context for the pod
+podSecurityContext:
+  # # -- Group ID for filesystem access
+  fsGroup: 1000
+  # # -- User ID for the pod
+  # runAsUser: 1000
+  # # -- Group ID for the pod
+  # runAsGroup: 1000
+
+# Security context for the container
+securityContext:
+  # -- User ID to run the container
+  runAsUser: 1000
+  # -- Group ID to run the container
+  runAsGroup: 1000
+  # -- Run container as non-root user
+  runAsNonRoot: true
+
+# -- Grace period for pod termination in seconds (corresponds to stop_grace_period)
+terminationGracePeriodSeconds: 120
+
+service:
+  # -- Kubernetes Service type
+  type: ClusterIP
+  # -- Kubernetes Service port
+  port: 7777
+
+# Ingress configuration for the nostr relay
+ingress:
+  # -- Enable ingress resource
+  enabled: true
+  # -- Ingress class name
+  className: "nginx"
+  # -- Additional ingress annotations
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  # -- List of ingress hosts
+  hosts:
+    - host: nostr.crypto.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  # -- Ingress TLS configuration
+  tls:
+    - hosts:
+        - nostr.crypto.example.com
+      secretName: strfry-ingress-tls
+
+# -- Resource limits and requests for the relay
+resources:
+  limits:
+    cpu: 500m
+    memory: 1Gi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+# Persistence configuration for the nostr relay database
+persistence:
+  # -- Enable persistent storage for the database
+  enabled: true
+  # -- Size of the persistent volume
+  size: 50Gi
+  # -- StorageClass name. If empty, uses the default provisioner.
+  storageClass: "longhorn"
+  # -- Access mode for the persistent volume
+  accessMode: ReadWriteOnce
+
+# NIP-05 configuration
+nip05:
+  # -- Enable NIP-05 verification service
+  enabled: false
+  image:
+    # -- NIP-05 server Docker image repository
+    repository: nginx
+    # -- NIP-05 server Docker image pull policy
+    pullPolicy: IfNotPresent
+    # -- Overrides the image tag
+    tag: "alpine"
+  # -- NIP-05 identities mapping usernames to public keys
+  identities:
+    kriegalex: e78c8cf2030deb7e76dd096223b7795e2c1aab862a708bd1c5cccebdf21af45b
+  # -- NIP-05 identities mapping user public keys to relays
+  relays:
+    e78c8cf2030deb7e76dd096223b7795e2c1aab862a708bd1c5cccebdf21af45b:
+      - wss://nostr.crypto.example.com
+      - wss://nostr-2.crypto.example.com
+
+
+# Global configuration
+config:
+  # -- Directory that contains the strfry LMDB database
+  db: "/app/strfry-db"
+
+  dbParams:
+    # -- Maximum number of threads/processes that can simultaneously have LMDB transactions open
+    maxreaders: 256
+    # -- Size of mmap() to use when loading LMDB (default is 10TB)
+    mapsize: "10995116277760"
+    # -- Disables read-ahead when accessing the LMDB mapping
+    noReadAhead: false
+
+  events:
+    # -- Maximum size of normalised JSON, in bytes
+    maxEventSize: "65536"
+    # -- Events newer than this (in seconds) will be rejected
+    rejectEventsNewerThanSeconds: 900
+    # -- Events older than this (in seconds) will be rejected
+    rejectEventsOlderThanSeconds: "94608000"
+    # -- Ephemeral events older than this (in seconds) will be rejected
+    rejectEphemeralEventsOlderThanSeconds: 60
+    # -- Ephemeral events will be deleted from the DB when older than this (in seconds)
+    ephemeralEventsLifetimeSeconds: 300
+    # -- Maximum number of tags allowed
+    maxNumTags: 2000
+    # -- Maximum size for tag values, in bytes
+    maxTagValSize: 1024
+
+  relay:
+    # -- Interface to listen on (Use 0.0.0.0 for k3s)
+    bind: "0.0.0.0"
+    # -- Port to open for the nostr websocket protocol
+    port: 7777
+    # -- OS-limit on maximum number of open files/sockets (if 0, don't attempt to set)
+    nofiles: "1000000"
+    # -- HTTP header that contains the client's real IP, before reverse proxying (must be all lower-case)
+    realIpHeader: ""
+    info:
+      # -- NIP-11: Name of this server (< 30 characters)
+      name: "nostr.crypto.example.com"
+      # -- NIP-11: Detailed information about relay
+      description: "main strfry relay provided by crypto.example.com"
+      # -- NIP-11: Administrative nostr pubkey, for contact purposes
+      pubkey: "e78c8cf2030deb7e76dd096223b7795e2c1aab862a708bd1c5cccebdf21af45b"
+      # -- NIP-11: Alternative administrative contact
+      contact: ""
+      # -- NIP-11: URL pointing to an image to be used as an icon for the relay
+      icon: "https://image.nostr.build/19b2f3f232b0a962b2cc2bd0d74156235b126102e45a3fc3be93c8528e05e034.png"
+      # -- List of supported NIPs as JSON array, or empty string to use default
+      nips: ""
+    # -- Maximum accepted incoming websocket frame size (bytes)
+    maxWebsocketPayloadSize: "131072"
+    # -- Maximum number of filters allowed in a REQ
+    maxReqFilterSize: 200
+    # -- Websocket-level PING message frequency (seconds)
+    autoPingSeconds: 55
+    # -- Enable TCP keep-alive to detect dropped connections
+    enableTcpKeepalive: false
+    # -- Uninterrupted CPU time for a REQ query during DB scan (microseconds)
+    queryTimesliceBudgetMicroseconds: "10000"
+    # -- Maximum records that can be returned per filter
+    maxFilterLimit: 500
+    # -- Maximum number of subscriptions a connection can have open
+    maxSubsPerConnection: 20
+    writePolicy:
+      # -- Path to an executable script that implements the writePolicy plugin logic
+      plugin: ""
+    compression:
+      # -- Enable permessage-deflate compression if supported by client
+      enabled: true
+      # -- Maintain a sliding window buffer for each connection
+      slidingWindow: true
+    logging:
+      # -- Dump all incoming messages
+      dumpInAll: false
+      # -- Dump all incoming EVENT messages
+      dumpInEvents: false
+      # -- Dump all incoming REQ/CLOSE messages
+      dumpInReqs: false
+      # -- Log performance metrics for initial REQ database scans
+      dbScanPerf: false
+      # -- Log reason for invalid event rejection
+      invalidEvents: true
+    numThreads:
+      # -- Ingester threads: route incoming requests, validate events/sigs
+      ingester: 3
+      # -- reqWorker threads: Handle initial DB scan for events
+      reqWorker: 3
+      # -- reqMonitor threads: Handle filtering of new events
+      reqMonitor: 3
+      # -- negentropy threads: Handle negentropy protocol messages
+      negentropy: 2
+    negentropy:
+      # -- Support negentropy protocol messages
+      enabled: true
+      # -- Maximum records that sync will process before returning an error
+      maxSyncEvents: "1000000"
+

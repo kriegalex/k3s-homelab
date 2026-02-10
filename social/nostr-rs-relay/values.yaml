@@ -1,0 +1,241 @@
+# -- Number of nostr-relay replicas
+replicaCount: 1
+
+image:
+  # -- Nostr relay Docker image repository
+  repository: scsibug/nostr-rs-relay
+  # -- Nostr relay Docker image pull policy
+  pullPolicy: IfNotPresent
+  # -- Overrides the image tag. Default is the chart appVersion
+  tag: ""
+
+# -- Specify imagePullSecrets if your Docker repository requires authentication
+imagePullSecrets: []
+# -- String to partially override nostr-relay.fullname template
+nameOverride: ""
+# -- String to fully override nostr-relay.fullname template
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Specifies whether a service account should be created
+  create: false
+  # -- The name of the service account to use. If not set and create is true, a name is generated using the fullname template.
+  name: ""
+
+# -- Annotations to be added to the pod
+podAnnotations: {}
+
+# Security context for the pod
+podSecurityContext:
+  # -- Group ID for filesystem access
+  fsGroup: 1000
+  # -- User ID for the pod
+  runAsUser: 1000
+  # -- Group ID for the pod
+  runAsGroup: 1000
+
+# Security context for the container
+securityContext:
+  # -- User ID to run the container
+  runAsUser: 1000
+  # -- Group ID to run the container
+  runAsGroup: 1000
+  # -- Run container as non-root user
+  runAsNonRoot: true
+
+service:
+  # -- Kubernetes Service type
+  type: ClusterIP
+  # -- Kubernetes Service port
+  port: 8080
+
+# Ingress configuration for the nostr relay
+ingress:
+  # -- Enable ingress resource
+  enabled: true
+  # -- Ingress class name
+  className: "nginx"
+  # -- Additional ingress annotations
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  # -- List of ingress hosts
+  hosts:
+    - host: nostr-2.crypto.example.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  # -- Ingress TLS configuration
+  tls:
+    - hosts:
+        - nostr-2.crypto.example.com
+      secretName: rsrelay-ingress-tls
+
+# -- Resource limits and requests for the relay
+resources:
+  limits:
+    cpu: 500m
+    memory: 1Gi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+# Persistence configuration for the nostr relay database
+persistence:
+  # -- Enable persistent storage for the database
+  enabled: true
+  # -- Size of the persistent volume
+  size: 50Gi
+  # -- StorageClass name. If empty, uses the default provisioner.
+  storageClass: "longhorn"
+  # -- Access mode for the persistent volume
+  accessMode: ReadWriteOnce
+
+# Configuration settings for the nostr relay
+config:
+  # Info settings for NIP-11 relay information document
+  info:
+    # -- The public-facing URL of your relay with the websocket schema (required)
+    relay_url: "wss://nostr-2.crypto.example.com/"
+    # -- Name of your relay (required)
+    name: "nostr-2.crypto.example.com"
+    # -- Description of your relay (required)
+    description: "rs-relay backup relay provided by crypto.example.com"
+    # -- Public key of the relay administrator (hexadecimal string)
+    pubkey: "e78c8cf2030deb7e76dd096223b7795e2c1aab862a708bd1c5cccebdf21af45b"
+    # -- Administrative contact for the relay
+    # contact: ""
+    # -- Path to favicon location
+    # favicon: ""
+    # -- URL of relay's icon
+    relay_icon: "https://image.nostr.build/19b2f3f232b0a962b2cc2bd0d74156235b126102e45a3fc3be93c8528e05e034.png"
+    # -- Path to custom relay html page
+    # relay_page: ""
+
+  # Diagnostics settings
+  # diagnostics:
+    # -- Enable tokio tracing (for use with tokio-console)
+    # tracing: false
+
+  # Database settings
+  # database:
+    # -- Database engine (sqlite/postgres), defaults to sqlite
+    # engine: "sqlite"
+    # -- Directory where the database files will be stored
+    # data_directory: "."
+    # -- Use an in-memory database instead of 'nostr.db' (requires sqlite engine)
+    # in_memory: false
+    # -- Minimum number of SQLite reader connections
+    # min_conn: 0
+    # -- Maximum number of SQLite reader connections
+    # max_conn: 8
+    # -- Database connection string (required for postgres)
+    # connection: ""
+    # -- Optional database connection string for writing
+    # connection_write: ""
+
+  # Logging settings
+  # logging:
+    # -- Directory to store log files
+    # folder_path: "./log"
+    # -- Prefix for log files
+    # file_prefix: "nostr-relay"
+
+  # gRPC interface settings
+  # grpc:
+    # -- gRPC server for event admission
+    # event_admission_server: ""
+    # -- Whether the event admission server denies writes
+    # restricts_write: false
+
+  # Network settings
+  network:
+    # -- Network binding address
+    address: "0.0.0.0"
+    # -- Network port
+    port: 8080
+    # -- Header for finding the client's IP when behind a reverse proxy
+    # remote_ip_header: ""
+    # -- Websocket ping interval in seconds
+    # ping_interval: 300
+
+  # Options controlling relay behavior
+  options:
+    # -- Reject events that claim to be created too far in the future (seconds)
+    reject_future_seconds: 1800
+
+  # Limits for the relay
+  limits:
+    # -- Limit events created per second, averaged over one minute
+    messages_per_sec: 100
+    # -- Limit client subscriptions created per minute
+    # subscriptions_per_min: 0
+    # -- Limit how many concurrent database connections a client can have
+    # db_conns_per_client: 0
+    # -- Limit blocking threads used for database connections
+    # max_blocking_threads: 16
+    # -- Limit the maximum size of an EVENT message in bytes
+    # max_event_bytes: 131072
+    # -- Maximum WebSocket message in bytes
+    # max_ws_message_bytes: 131072
+    # -- Maximum WebSocket frame size in bytes
+    # max_ws_frame_bytes: 131072
+    # -- Broadcast buffer size, in number of events
+    # broadcast_buffer: 16384
+    # -- Event persistence buffer size, in number of events
+    # event_persist_buffer: 4096
+    # -- Event kind blacklist
+    # event_kind_blacklist: []
+    # -- Event kind allowlist
+    # event_kind_allowlist: []
+    # -- Rejects imprecise requests (kind only and author only etc)
+    limit_scrapers: false
+
+  # Authorization settings
+  # authorization:
+    # -- Pubkey addresses whitelisted for event publishing
+    # pubkey_whitelist: []
+    # -- Enable NIP-42 authentication
+    # nip42_auth: false
+    # -- Send DMs and gift wraps only to their authenticated recipients
+    # nip42_dms: false
+
+  # Verified users settings
+  # verified_users:
+    # -- NIP-05 verification of users (enabled/passive/disabled)
+    # mode: "disabled"
+    # -- Domain names that will be prevented from publishing events
+    # domain_blacklist: []
+    # -- Domain names that are allowed to publish events
+    # domain_whitelist: []
+    # -- Consider a pubkey verified if we have a successful validation within this time
+    # verify_expiration: "1 week"
+    # -- How long to wait between verification attempts
+    # verify_update_frequency: "24 hours"
+    # -- How many consecutive failed checks before giving up
+    # max_consecutive_failures: 20
+
+  # Pay-to-relay settings
+  # pay_to_relay:
+    # -- Enable pay to relay
+    # enabled: false
+    # -- Node interface to use
+    # processor: "ClnRest/LNBits"
+    # -- The cost to be admitted to relay
+    # admission_cost: 4200
+    # -- The cost in sats per post
+    # cost_per_event: 0
+    # -- Url of node api
+    # node_url: ""
+    # -- LNBits api secret
+    # api_secret: ""
+    # -- Path to CLN rune
+    # rune_path: ""
+    # -- Nostr direct message on signup
+    # direct_message: false
+    # -- Terms of service
+    # terms_message: ""
+    # -- Whether or not new sign ups should be allowed
+    # sign_ups: false
+    # -- Secret key (optional if direct_message=false)
+    # secret_key: ""
+
