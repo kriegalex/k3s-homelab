@@ -1,0 +1,84 @@
+# roles/plex/templates/values.yaml.j2
+image:
+  registry: index.docker.io
+  repository: plexinc/pms-docker
+  tag: "1.42.2.10156-f737b826c"
+  pullPolicy: IfNotPresent
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  url: "https://plex.homelab.example.com"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+  tls:
+    - hosts:
+        - plex.homelab.example.com
+      secretName: ingress-lets-encrypt
+
+pms:
+  storageClassName: longhorn
+  configStorage: 200Gi
+  configExistingClaim: pms-config
+  gpu:
+    nvidia:
+      enabled: false
+  resources:
+    requests:
+      cpu: "2000m"
+      memory: "4Gi"
+      gpu.intel.com/i915: "1"
+    limits:
+      cpu: "4000m"
+      memory: "16Gi"
+      gpu.intel.com/i915: "1"
+
+service:
+  type: ClusterIP
+  port: 32400
+
+extraVolumeMounts:
+  - name: movies
+    mountPath: /movies
+  - name: tv
+    mountPath: /tv
+  - name: anime
+    mountPath: /anime
+  - name: music
+    mountPath: /music
+
+extraVolumes:
+  - name: movies
+    persistentVolumeClaim:
+      claimName: nfs-movies-plex
+  - name: tv
+    persistentVolumeClaim:
+      claimName: nfs-tv-plex
+  - name: anime
+    persistentVolumeClaim:
+      claimName: nfs-anime-plex
+  - name: music
+    persistentVolumeClaim:
+      claimName: nfs-music-plex
+
+extraEnv:
+  TZ: "Europe/Paris"
+
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3s-worker1
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+          - key: "gpu.intel.com/device-id.0300-7d55.count"
+            operator: In
+            values:
+              - "1"
