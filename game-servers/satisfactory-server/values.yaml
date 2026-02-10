@@ -1,0 +1,126 @@
+# Default values for satisfactory.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: wolveix/satisfactory-server
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "v1.9.10"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 1000
+
+# Available Environment variables: (https://github.com/wolveix/satisfactory-server?tab=readme-ov-file#environment-variables)
+# AUTOPAUSE: true # -- pause game when no player is connected
+# AUTOSAVEINTERVAL: 300 # -- autosave interval in seconds
+# AUTOSAVENUM: 3 # -- number of rotating autosave files
+# AUTOSAVEONDISCONNECT: true # -- autosave when last player disconnects
+# CRASHREPORT: true # -- automatic crash reporting
+# DEBUG: false # -- for debugging the server
+# DISABLESEASONALEVENTS: false # -- disable the FICSMAS event (you miserable bastard)
+# MAXPLAYERS: 4 # -- set the player limit for your server
+# PGID: 1000 # -- set the group ID of the user the server will run as
+# PUID: 1000 # -- set the user ID of the user the server will run as
+# SERVERGAMEPORT: 7777 # -- set the game's port
+# SERVERIP: 0.0.0.0    # -- set the game's ip (usually not needed)
+# SKIPUPDATE: false # -- avoid updating the game on container start/restart
+# STEAMBETA: false # -- set experimental game version
+# ROOTLESS: true # needs to be set to run rootless
+# ...
+env:
+  - name: ROOTLESS
+    value: "true"
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  # needs to be set to false that steamcmd can write to /home/steam
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+service:
+  # NodePort, LoadBalancer
+  type: LoadBalancer
+  # ExternalIP can be added if LoadBalancer as type is used
+  #externalIPs:
+  #  - 192.168.178.0
+  port: 7777
+  extraPortsEnabled: true
+  extraPorts:
+    - name: extra-tcp
+      port: 8888
+      targetPort: 8888
+      protocol: TCP
+
+
+resources:
+  requests:
+    cpu: "1"
+    memory: "8Gi"
+  limits:
+    cpu: "4"
+    memory: "16Gi"
+
+strategy: {}
+  # type: Recreate
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+persistence:
+  - name: config
+    enabled: true
+    annotations: {}
+    accessModes:
+      - ReadWriteOnce
+    storageClass: "longhorn"
+    size: 1Gi
+  - name: server-cache
+    enabled: true
+    annotations: {}
+    accessModes:
+      - ReadWriteOnce
+    storageClass: "longhorn"
+    size: 20Gi
+
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+

@@ -1,0 +1,24 @@
+persistence:
+  enabled: true
+  existingClaim: palworld-server
+
+resources:
+  limits:
+    cpu: 3000m
+    memory: 12Gi
+  requests:
+    cpu: 1500m
+    memory: 4Gi
+
+# Reference existing secret for passwords (recommended for production)
+secret:
+  existingSecret: palworld-server-credentials
+
+server:
+  # Passwords are now managed via the secret above
+  adminPassword: ""
+  password: ""
+  community: true
+  description: ""
+  name: Serveur Ramelemouche
+  players: 8
