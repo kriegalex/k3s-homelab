@@ -1,0 +1,31 @@
+.idea
+.vs
+.vscode
+.DS_Store
+*.log
+*.tmp
+*.bak
+CLAUDE.md
+
+# Auto-generated Helm values (extracted from live deployments)
+**/helm-values.yaml
+**/helm-values-*.yaml
+
+# Real values files (unsanitized) - use values.yaml for committed/sanitized versions
+**/custom-values.yaml
+**/custom-values-*.yaml
+**/*-custom-values.yaml
+
+# Secrets files - NEVER COMMIT THESE
+# Note: secrets-template.yaml files ARE committed (they're templates with placeholders)
+**/secrets.yaml
+**/secrets-*.yaml
+!**/secrets-template.yaml
+**/*secrets*.yaml.bak
+**/s3-backup-credentials-secret.yaml
+
+# Personal/local values files that may contain secrets
+**/custom-values-personal.yaml
+**/values-personal.yaml
+**/local-values.yaml
+

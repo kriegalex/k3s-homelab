@@ -1,0 +1,32 @@
+name: Security Scan
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install TruffleHog
+        run: |
+          set -e
+          TEMP_DIR=$(mktemp -d)
+          cd "$TEMP_DIR"
+          wget --no-verbose https://github.com/trufflesecurity/trufflehog/releases/download/v3.93.1/trufflehog_3.93.1_linux_amd64.tar.gz
+          tar -xzf trufflehog_3.93.1_linux_amd64.tar.gz
+          chmod +x trufflehog
+          mkdir -p $HOME/.local/bin
+          mv trufflehog $HOME/.local/bin/
+          cd -
+          rm -rf "$TEMP_DIR"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Scan for secrets
+        run: |
+          trufflehog git file://. --fail --exclude-paths .trufflehog-exclude.txt

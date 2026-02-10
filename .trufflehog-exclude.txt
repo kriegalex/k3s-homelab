@@ -1,0 +1,11 @@
+# Exclude template files and example configurations (regex patterns)
+.*secrets-template\.yaml$
+.*example-.*\.yaml$
+.*CLAUDE\.md$
+.*README\.md$
+
+# Exclude test data
+.*/tests?/.*
+
+# Exclude sanitization scripts (they contain domain patterns that look like secrets)
+.*scripts/sanitize-helm-values\.sh$
