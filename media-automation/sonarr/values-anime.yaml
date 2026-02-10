@@ -1,0 +1,62 @@
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3s-worker3
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - plex-media-server
+        namespaces:
+        - plex
+        topologyKey: kubernetes.io/hostname
+      weight: 80
+image:
+  pullPolicy: Always
+  repository: ghcr.io/hotio/sonarr
+  tag: latest
+ingress:
+  annotations:
+    kubernetes.io/ingress.class: nginx
+  enabled: true
+  hosts:
+  - host: sonarr-anime.local
+    paths:
+    - path: /
+      pathType: Prefix
+persistence:
+  accessMode: ReadWriteOnce
+  additionalMounts:
+  - mountPath: /media
+    name: media
+  - mountPath: /torrent
+    name: torrent
+  additionalVolumes:
+  - name: media
+    persistentVolumeClaim:
+      claimName: nfs-anime
+  - name: torrent
+    persistentVolumeClaim:
+      claimName: nfs-torrent
+  enabled: true
+  existingClaim: sonarr-anime
+resources:
+  limits:
+    cpu: 1000m
+    memory: 8Gi
+  requests:
+    cpu: 100m
+    memory: 512Mi
+service:
+  port: 80
+  type: ClusterIP

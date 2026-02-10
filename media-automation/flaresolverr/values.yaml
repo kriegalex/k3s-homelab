@@ -1,0 +1,26 @@
+image:
+  # -- image repository
+  repository: ghcr.io/flaresolverr/flaresolverr
+  # -- image pull policy
+  pullPolicy: Always
+  # -- image tag
+  tag: "latest"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3s-worker3

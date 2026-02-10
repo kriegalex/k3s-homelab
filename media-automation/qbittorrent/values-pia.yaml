@@ -1,0 +1,84 @@
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3s-worker4
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - plex-media-server
+        namespace: plex
+        topologyKey: kubernetes.io/hostname
+      weight: 90
+
+## Hotio qbittorrent image version
+## ref: https://hotio.dev/containers/qbittorrent
+##
+image:
+  repository: ghcr.io/hotio/qbittorrent  
+  tag: legacy-511863b # 4.3.9 by default, known to be stable
+
+# Service Configuration
+service:
+  type: LoadBalancer
+
+env:
+  PRIVOXY_ENABLED: false
+  UNBOUND_ENABLED: false
+  PUID: 1000
+  PGID: 1000
+  UMASK: 2
+  TZ: Etc/UTC
+  VPN_LAN_NETWORK: "" # be careful it doesn't conflict with the DNS of your VPN (i.e. PIA is 192.168.1.1042/243)
+  VPN_PIA_PORT_FORWARD_PERSIST: true
+  VPN_PIA_PREFERRED_REGION: "swiss"
+
+vpn:
+  pia:
+    enabled: true # same as VPN_ENABLED env
+    # Name of existing secret to use for PIA VPN.
+    existingSecret: "vpn-pia-credentials"
+    # Names of keys in existing secret to use for credentials
+    existingKeys:
+      usernameKey: "pia-user"
+      passwordKey: "pia-password"
+  wireguard:
+    enabled: false
+
+ingress:
+  className: nginx
+  enabled: true
+  hosts:
+  - host: torrent.local
+    paths:
+    - path: /
+      pathType: ImplementationSpecific
+  tls: []
+
+# Persistence
+persistence:
+  config:
+    enabled: true
+    existingClaim: qbittorrent-config
+  data:
+    enabled: true
+    existingClaim: nfs-torrent
+
+resources:
+  limits:
+    cpu: 1
+    memory: 8Gi
+  requests:
+    cpu: 250m
+    memory: 2Gi
+

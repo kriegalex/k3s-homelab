@@ -1,0 +1,58 @@
+image:
+  # -- image repository
+  repository: ghcr.io/hotio/lidarr
+  tag: release
+  pullPolicy: Always
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 2Gi
+
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3s-worker3
+
+env:
+  PUID: "1000"
+  PGID: "1000"
+  TZ: "Europe/London"
+  UMASK: "002"
+
+ingress:
+  main:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+    - host: lidarr.local
+      paths:
+      - path: /
+        pathType: Prefix
+
+# -- Configure persistence settings for the chart under this key.
+## Config persistence is required for the Prometheus exporter sidecar.
+# @default -- See values.yaml
+persistence:
+  config:
+    enabled: true
+    existingClaim: lidarr-config
+
+  media:
+    enabled: true
+    mountPath: /media
+    existingClaim: nfs-music
+
+  torrent:
+    enabled: true
+    mountPath: /torrent
+    existingClaim: nfs-torrent
