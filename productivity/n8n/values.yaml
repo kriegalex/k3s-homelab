@@ -1,0 +1,90 @@
+image:
+  repository: n8nio/n8n
+  tag: "1.123.12"  # Pin to specific version for production stability
+imagePullSecrets:
+  - name: 8gears-registry-n8n
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: n8n.homelab.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+      - n8n.homelab.example.com
+      secretName: n8n-tls
+
+persistence:
+  enabled: true
+  type: existing  # Changed from 'dynamic' to 'existing'
+  existingClaim: n8n-data  # Use explicit PVC for better IaC
+  # storageClass: null  # Not needed with existingClaim
+  # size: 10Gi  # Size defined in PVC manifest
+
+# Official structure with main wrapper
+main:
+  config:
+    webhook_url: "https://n8n.homelab.example.com/"
+    n8n:
+      proxy_hops: 1
+    db:
+      type: postgresdb
+      postgresdb:
+        host: n8n-db-rw
+        port: 5432
+        database: n8n
+        user: n8n
+        # password is read from secret via extraEnv
+        pool:
+          size: 10
+    
+    generic:
+      timezone: "Europe/London"
+
+  secret:
+    n8n:
+      encryption_key: ""  # Will be read from secret via extraEnv
+
+  # Set additional environment variables
+  extraEnv:
+    # Database password from CNPG generated secret
+    DB_POSTGRESDB_PASSWORD:
+      valueFrom:
+        secretKeyRef:
+          name: n8n-db-credentials
+          key: password
+    
+    # Encryption key from secret
+    N8N_ENCRYPTION_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: n8n-secrets
+          key: encryption-key
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2048Mi
+
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3s-worker4

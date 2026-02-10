@@ -1,0 +1,54 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: n8n-db
+  namespace: n8n
+spec:
+  instances: 3
+  primaryUpdateStrategy: unsupervised
+  
+  # PostgreSQL configuration
+  postgresql:
+    parameters:
+      shared_buffers: 256MB
+      max_connections: "100"
+      
+  # Storage configuration
+  storage:
+    storageClass: longhorn-single-replica
+    size: 20Gi
+    
+  # Resources configuration
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 150m
+    limits:
+      memory: 1Gi
+      cpu: 500m
+      
+  # Backup configuration
+  backup:
+    retentionPolicy: "30d"
+    barmanObjectStore:
+      destinationPath: "s3://n8n-backups/"
+      endpointURL: "http://10.0.0.7:8010"
+      s3Credentials:
+        accessKeyId:
+          name: n8n-db-backup-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: n8n-db-backup-credentials
+          key: ACCESS_SECRET_KEY
+      wal:
+        compression: bzip2
+      data:
+        compression: bzip2
+      
+  # Database initialization
+  bootstrap:
+    initdb:
+      database: n8n
+      owner: n8n
+      secret:
+        name: n8n-db-credentials

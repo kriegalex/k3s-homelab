@@ -1,0 +1,185 @@
+#
+# IMPORTANT NOTE
+#
+# This chart inherits from our common library chart. You can check the default values/options here:
+# https://github.com/bjw-s/helm-charts/blob/a081de5/charts/library/common/values.yaml
+#
+
+image:
+  # -- Image tag
+  tag: 2.20.5
+
+# -- Environment variables [[ref]](https://docs.paperless-ngx.com/configuration/)
+# @default -- See [values.yaml](./values.yaml)
+env:
+  PAPERLESS_CONSUMER_POLLING: "60"
+  PAPERLESS_CONSUMER_RECURSIVE: true
+  PAPERLESS_CONSUMER_SUBDIRS_AS_TAGS: true
+  PAPERLESS_DATA_DIR: /usr/src/paperless/media
+  PAPERLESS_DBENGINE: postgresql
+  PAPERLESS_DBHOST: paperless-db-rw
+  PAPERLESS_DBNAME: paperless
+  PAPERLESS_DBUSER: paperless
+  PAPERLESS_FILENAME_FORMAT: '{created_year}/{correspondent}/{title}'
+  PAPERLESS_OCR_USER_ARGS: '{"invalidate_digital_signatures": true}'
+  PAPERLESS_TRUSTED_PROXIES: 10.42.0.0/16
+  TZ: UTC
+
+# Add envFrom to load secrets
+envFrom:
+  - secretRef:
+      name: paperless-secrets
+
+ingress:
+  # -- Enable and configure ingress settings for the chart under this key.
+  # @default -- See [values.yaml](./values.yaml)
+  main:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/proxy-body-size: 64m
+    hosts:
+    - host: paperless.homelab.example.com
+      paths:
+      - path: /
+    tls:
+    - hosts:
+      - paperless.homelab.example.com
+      secretName: paperless-ingress-tls
+
+persistence:
+  data:
+    enabled: false
+  media:
+    enabled: true
+    existingClaim: nfs-paperless-media
+    retain: true
+  export:
+    enabled: true
+    existingClaim: nfs-paperless-export
+    retain: true
+  consume:
+    enabled: true
+    existingClaim: nfs-paperless-consume
+    retain: true
+
+# -- Enable and configure postgresql database subchart under this key.
+#    If enabled, the app's db envs will be set for you.
+#    [[ref]](https://github.com/bitnami/charts/tree/main/bitnami/postgresql)
+# @default -- See [values.yaml](./values.yaml)
+# NOTE: Currently using CloudNativePG (CNPG) external database. If enabling this subchart,
+#       add 'postgres-password' key to paperless-db-credentials secret.
+postgresql:
+  enabled: false
+  # auth:
+  #   database: paperless
+  #   username: paperless
+  #   existingSecret: paperless-db-credentials
+  #   secretKeys:
+  #     adminPasswordKey: postgres-password  # Add this key to secret if enabling subchart
+  #     userPasswordKey: password
+  # primary:
+  #   persistence:
+  #     enabled: true
+  #     storageClass: longhorn-single-replica
+  # affinity:
+  #   podAffinity:
+  #     preferredDuringSchedulingIgnoredDuringExecution:
+  #     - podAffinityTerm:
+  #         labelSelector:
+  #           matchExpressions:
+  #           - key: app.kubernetes.io/instance
+  #             operator: In
+  #             values:
+  #             - paperless-ngx
+  #         topologyKey: kubernetes.io/hostname
+  #       weight: 60
+
+# -- Enable and configure mariadb database subchart under this key.
+#    If enabled, the app's db envs will be set for you.
+#    [[ref]](https://github.com/bitnami/charts/tree/main/bitnami/mariadb)
+# @default -- See [values.yaml](./values.yaml)
+mariadb:
+  enabled: false
+
+# -- Enable and configure redis subchart under this key.
+#    If enabled, the app's Redis env will be set for you.
+#    [[ref]](https://github.com/bitnami/charts/tree/main/bitnami/redis)
+# @default -- See [values.yaml](./values.yaml)
+redis:
+  enabled: true
+  architecture: standalone
+  image:
+    repository: bitnamilegacy/redis
+    tag: 7.4.2-debian-12-r9
+  global:
+    security:
+      allowInsecureImages: true
+  auth:
+    existingSecret: paperless-redis-credentials
+    existingSecretPasswordKey: redis-password
+  master:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+    affinity:
+      podAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                - paperless-ngx
+            topologyKey: kubernetes.io/hostname
+          weight: 60
+    count: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 1Gi
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3s-worker4
+  podAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/instance
+            operator: In
+            values:
+            - paperless-ngx
+        topologyKey: kubernetes.io/hostname
+      weight: 60
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - plex-media-server
+        namespaces:
+        - plex
+        topologyKey: kubernetes.io/hostname
+      weight: 50

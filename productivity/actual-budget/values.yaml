@@ -1,0 +1,51 @@
+
+image:
+  tag: latest
+  pullPolicy: Always
+  repository: actualbudget/actual-server
+
+# Persistent storage settings for data.
+persistence:
+  enabled: true
+  existingClaim: actual-budget-pvc  # Use explicit PVC for better IaC
+  # size: 5Gi  # Size defined in PVC manifest
+  # storageClass: longhorn  # Not needed with existingClaim
+
+ingress:
+  enabled: true
+  url: budget.homelab.example.com
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+  - host: budget.homelab.example.com
+    paths:
+    - path: /
+      pathType: Prefix
+  tls:
+  - hosts:
+    - budget.homelab.example.com
+    secretName: actual-budget-tls
+
+service:
+  port: 5006
+  type: ClusterIP
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3s-worker4

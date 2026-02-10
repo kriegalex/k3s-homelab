@@ -1,0 +1,83 @@
+# Default values for gitea.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+image:
+  registry: ""
+  repository: gitea/gitea
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+  rootless: true
+
+service:
+  ssh:
+    type: LoadBalancer
+    port: 8022
+    externalTrafficPolicy: Local
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # kubernetes.io/ingress.class: nginx
+  hosts:
+    - host: git.domain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+   - secretName: gitea-tls
+     hosts:
+       - git.domain.com
+
+persistence:
+  enabled: true
+  create: false
+  mount: true
+  claimName: nfs-gitea
+
+## if you need to restore the DB for example
+# initPreScript: |
+#   sleep 80
+
+gitea:
+  # config:
+  #   repository:
+  #     ROOT: /data/git/gitea-repositories
+  admin:
+    existingSecret: gitea-admin-secret
+
+redis-cluster:
+  enabled: false
+
+redis:
+  enabled: true
+  architecture: standalone
+  global:
+    redis:
+      password: changeme
+  master:
+    count: 1
+    persistence:
+      existingClaim: "gitea-redis"
+
+## @section PostgreSQL HA
+postgresql-ha:
+  enabled: false
+
+postgresql:
+  enabled: true
+  global:
+    postgresql:
+      auth:
+        password: gitea
+        database: gitea
+        username: gitea
+      service:
+        ports:
+          postgresql: 5432
+  primary:
+    persistence:
+      existingClaim: "gitea-psql"

@@ -1,0 +1,292 @@
+## ref: https://hub.docker.com/r/library/nextcloud/tags/
+##
+image:
+  repository: nextcloud
+  flavor: fpm
+  tag: 32.0.5-fpm
+  pullPolicy: IfNotPresent
+
+# Number of replicas to be deployed
+replicaCount: 1
+
+## Allowing use of ingress controllers
+## ref: https://kubernetes.io/docs/concepts/services-networking/ingress/
+##
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 4G
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/cors-allow-headers: X-Forwarded-For
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/server-snippet: |-
+      server_tokens off;
+      proxy_hide_header X-Powered-By;
+      rewrite ^/.well-known/webfinger /index.php/.well-known/webfinger last;
+      rewrite ^/.well-known/nodeinfo /index.php/.well-known/nodeinfo last;
+      rewrite ^/.well-known/host-meta /public.php?service=host-meta last;
+      rewrite ^/.well-known/host-meta.json /public.php?service=host-meta-json;
+      location = /.well-known/carddav {
+        return 301 $scheme://$host/remote.php/dav;
+      }
+      location = /.well-known/caldav {
+        return 301 $scheme://$host/remote.php/dav;
+      }
+      location = /robots.txt {
+        allow all;
+        log_not_found off;
+        access_log off;
+      }
+      location ~ ^/(?:build|tests|config|lib|3rdparty|templates|data)/ {
+        deny all;
+      }
+      location ~ ^/(?:autotest|occ|issue|indie|db_|console) {
+        deny all;
+      }
+  tls:
+  - hosts:
+    - cloud.homelab.example.com
+    secretName: nextcloud-tls
+  path: /
+  pathType: Prefix
+
+phpClientHttpsFix:
+  enabled: true
+  protocol: https
+
+nextcloud:
+  host: cloud.homelab.example.com
+  ## Use an existing secret
+  existingSecret:
+    enabled: true
+    secretName: nextcloud-admin-credentials
+    usernameKey: nextcloud-username
+    passwordKey: nextcloud-password
+  trustedDomains:
+    - cloud.homelab.example.com
+  extraEnv:
+  - name: TRUSTED_PROXIES
+    value: 10.42.0.0/16
+
+nginx:
+  ## You need to set an fpm version of the image for nextcloud if you want to use nginx!
+  enabled: true
+
+internalDatabase:
+  enabled: false
+  name: nextcloud
+
+##
+## External database configuration
+##
+externalDatabase:
+  enabled: true
+  type: postgresql
+  host: nextcloud-db-rw
+  # user: nextcloud
+  database: nextcloud
+  existingSecret:
+    enabled: true
+    secretName: nextcloud-db-credentials
+    usernameKey: db-username
+    passwordKey: db-password
+
+##
+## PostgreSQL chart configuration
+## for more options see https://github.com/bitnami/charts/tree/main/bitnami/postgresql
+##
+postgresql:
+  enabled: false
+  # global:
+  #   postgresql:
+  #     auth:
+  #       username: nextcloud
+  #       password: Nextcloud1988_DB
+  #       database: nextcloud
+  # primary:
+  #   persistence:
+  #     enabled: true
+  #     size: 10Gi
+  #     storageClass: longhorn-single-replica
+  # affinity:
+  #   podAffinity:
+  #     preferredDuringSchedulingIgnoredDuringExecution:
+  #     - podAffinityTerm:
+  #         labelSelector:
+  #           matchExpressions:
+  #           - key: app.kubernetes.io/instance
+  #             operator: In
+  #             values:
+  #             - nextcloud
+  #         topologyKey: kubernetes.io/hostname
+  #       weight: 80
+
+##
+## Redis chart configuration
+## for more options see https://github.com/bitnami/charts/tree/main/bitnami/redis
+##
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: true
+    existingSecret: nextcloud-redis-credentials
+    existingSecretPasswordKey: redis-password
+  master:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+    affinity:
+      podAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                - nextcloud
+            topologyKey: kubernetes.io/hostname
+          weight: 80
+    persistence:
+      enabled: true
+      storageClass: longhorn-single-replica
+
+##
+## Collabora chart configuration
+## for more options see https://github.com/CollaboraOnline/online/tree/master/kubernetes/helm/collabora-online
+##
+collabora:
+  enabled: true
+  collabora:
+    aliasgroups:
+    - host: https://cloud.homelab.example.com:443
+    extra_params: --o:ssl.enable=false --o:ssl.termination=true
+    server_name: collabora.homelab.example.com
+    username: admin
+    existingSecret:
+      enabled: true
+      secretName: "nextcloud-collabora-credentials"
+      passwordKey: "password"
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+      nginx.ingress.kubernetes.io/upstream-hash-by: $arg_WOPISrc
+    hosts:
+    - host: collabora.homelab.example.com
+      paths:
+      - path: /
+        pathType: ImplementationSpecific
+    tls:
+    - hosts:
+      - collabora.homelab.example.com
+      secretName: nextcloud-collabora-tls
+  resources:
+    requests:
+      cpu: 100m
+      memory: 1Gi
+    limits:
+      cpu: 500m
+      memory: 2Gi
+  affinity:
+    podAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+            - key: app.kubernetes.io/instance
+              operator: In
+              values:
+              - nextcloud
+          topologyKey: kubernetes.io/hostname
+        weight: 80
+
+cronjob:
+  enabled: true
+
+service:
+  type: ClusterIP
+  port: 8080
+
+## Enable persistence using Persistent Volume Claims
+## ref: https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+##
+persistence:
+  enabled: true
+  existingClaim: nextcloud-config
+  nextcloudData:
+    enabled: true
+    existingClaim: nfs-nextcloud
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+startupProbe:
+  enabled: false
+
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3s-worker4
+  podAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/instance
+            operator: In
+            values:
+            - nextcloud
+        topologyKey: kubernetes.io/hostname
+      weight: 80
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - plex-media-server
+        topologyKey: kubernetes.io/hostname
+      weight: 80
+
+## Prometheus Exporter / Metrics
+##
+metrics:
+  enabled: false
