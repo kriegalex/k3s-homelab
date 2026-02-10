@@ -1,0 +1,86 @@
+
+image:
+  tag: "latest"
+
+ingress:
+  # Specify if an ingress resource for the pms server should be created or not
+  enabled: true
+
+  # The ingress class that should be used
+  ingressClassName: "nginx"
+
+  # The url to use for the ingress reverse proxy to point at this pms instance
+  url: "https://jellyfin.domain.com"
+
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP" # Change to HTTPS if required
+
+tolerations: []
+## If you dedicate a node to a media server via tainting
+# tolerations:
+# - key: "dedicated"
+#   operator: "Equal"
+#   value: "media-server"
+#   effect: "NoSchedule"
+
+affinity: {}
+## Affinity for an Intel ARC A380 (56a5)
+# affinity:
+#   nodeAffinity:
+#     requiredDuringSchedulingIgnoredDuringExecution:
+#       nodeSelectorTerms:
+#       - matchExpressions:
+#         - key: "gpu.intel.com/device-id.0300-56a5.count"
+#           operator: In
+#           values:
+#           - "1"
+
+resources: {}
+## Asking and reserving an Intel GPU resource
+# resources:
+#   limits:
+#     gpu.intel.com/i915: "1"
+#   requests:
+#     cpu: "1"
+#     gpu.intel.com/i915: "1"
+#     memory: 4Gi
+
+persistence:
+  # This is the directory containing the server configuration files. 
+  config:
+    enabled: true
+    existingClaim: "jellyfin-config"
+  # This is the directory containing the server cache (metadata for the libraries).
+  cache:
+    enabled: false
+    existingClaim: ""
+
+  ## Example without "existingClaim" and with "storageClassName".
+  # config:
+  #   enabled: true
+  #   mountPath: /config
+  #   storageClassName: "jellyfin-config"
+  #   size: 20Gi # can grow to 100GB+ for big libraries
+  # cache:
+  #   enabled: true
+  #   mountPath: /cache
+  #   storageClassName: "jellyfin-cache"
+  #   size: 5Gi
+
+# Optionally specify additional volumes for the pod.
+extraVolumes:
+  - name: movies
+    persistentVolumeClaim:
+      claimName: nfs-movies
+  - name: tv
+    persistentVolumeClaim:
+      claimName: nfs-tv
+
+# Optionally specify additional volume mounts for the media.
+extraVolumeMounts:
+  - name: movies
+    mountPath: /movies
+  - name: tv
+    mountPath: /tv
+
