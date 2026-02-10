@@ -1,0 +1,38 @@
+# Copyright Broadcom, Inc. All Rights Reserved.
+# SPDX-License-Identifier: APACHE-2.0
+
+image:
+  registry: docker.io
+  repository: bitnamilegacy/redis
+  tag: 7.2.5-debian-12-r4
+
+architecture: standalone # standalone if only 1 master pod
+
+master:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 750m
+      memory: 768Mi
+  persistence:
+    enabled: true
+    existingClaim: redis-master
+
+replica:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 750m
+      memory: 768Mi
+  persistence:
+    enabled: false
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+    selector:
+      matchLabels:
+        app: redis-replica
