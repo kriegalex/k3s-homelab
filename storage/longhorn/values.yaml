@@ -1,0 +1,18 @@
+# Longhorn Custom Values
+# For full values reference, see: https://github.com/longhorn/charts/blob/master/charts/longhorn/values.yaml
+
+# Storage class configuration
+persistence:
+  reclaimPolicy: Retain
+  defaultDataLocality: "best-effort"
+
+defaultBackupStore:
+  backupTarget: s3://longhorn@ch-fr-1/
+  backupTargetCredentialSecret: minio-bucket-credentials
+
+# Ingress configuration for Longhorn UI
+ingress:
+  enabled: true
+  host: longhorn.local
+  ingressClassName: nginx
+  tls: false
