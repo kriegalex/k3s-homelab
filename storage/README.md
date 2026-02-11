@@ -17,6 +17,7 @@ Location: `storage/nfs-shares/`
 - **Provisioning**: Static PVs + dynamic via nfs-client StorageClass
 - **Use Cases**: Media libraries, shared datasets, bulk storage
 - **NFS Server**: 10.0.0.2 (external)
+- **Organization**: Shared media in `nfs-shares/shared-media/`, app-specific in each app's `nfs/` directory
 
 ## When to Use Which Storage Backend
 

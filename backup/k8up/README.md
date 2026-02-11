@@ -25,6 +25,16 @@ k8up is a Kubernetes operator for backup and restore operations using Restic. It
 - S3 credentials (access key and secret key)
 - Storage provisioner for PVCs
 
+## NFS Backup Storage
+
+Apply NFS volume for k8up backup repository:
+
+```fish
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/backup/k8up/nfs/nfs-backup.yaml
+```
+
+See [k8up NFS README](nfs/README.md) for details.
+
 ## What is k8up?
 
 k8up is a **Kubernetes operator** that automates backup and restore operations using Restic. It provides:

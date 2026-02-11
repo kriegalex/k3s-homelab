@@ -1,5 +1,17 @@
 # Paperless-ngx
 
+## NFS Document Storage
+
+Apply NFS volumes for Paperless document storage:
+
+```fish
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/productivity/paperless-ngx/nfs/nfs-paperless-media.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/productivity/paperless-ngx/nfs/nfs-paperless-consume.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/productivity/paperless-ngx/nfs/nfs-paperless-export.yaml
+```
+
+See [Paperless NFS README](nfs/README.md) for details on the three storage volumes.
+
 ## Setup Secrets
 
 ⚠️ **IMPORTANT:** Never commit secrets to git. All password values must be stored in Kubernetes secrets.

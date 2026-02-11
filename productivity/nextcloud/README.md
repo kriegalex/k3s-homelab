@@ -15,6 +15,16 @@ kubectl apply -f nextcloud-config-pvc.yaml
 
 This creates a Longhorn-backed persistent volume with automatic replication and snapshot support.
 
+## NFS User Data Storage
+
+Apply NFS volume for Nextcloud user files:
+
+```fish
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/productivity/nextcloud/nfs/nfs-nextcloud.yaml
+```
+
+See [Nextcloud NFS README](nfs/README.md) for details.
+
 ## Setup Secrets
 
 ⚠️ **IMPORTANT:** Never commit secrets to git. All password values must be stored in Kubernetes secrets.

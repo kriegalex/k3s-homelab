@@ -11,6 +11,16 @@ kubectl apply -f gitea-psql-pvc.yaml
 
 This creates Longhorn-backed persistent volumes with automatic snapshot support. Note: These use `longhorn-single-replica` storage class since Redis and PostgreSQL handle their own data replication.
 
+## NFS Repository Storage
+
+Apply NFS volume for Gitea repository data:
+
+```fish
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/productivity/gitea/nfs/nfs-gitea.yaml
+```
+
+See [Gitea NFS README](nfs/README.md) for details.
+
 ## Setup persistence
 
 On the control plane:

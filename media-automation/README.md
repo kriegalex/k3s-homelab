@@ -31,18 +31,25 @@ All applications share centralized NFS volumes for media storage:
 - **Movies**: `nfs-movies` (used by radarr, plex, jellyfin)
 - **TV Shows**: `nfs-tv` (used by sonarr, plex, jellyfin)
 - **Music**: `nfs-music` (used by lidarr, plex, jellyfin)
-- **Downloads**: `nfs-downloads` (used by qbittorrent, radarr, sonarr, lidarr)
+- **Anime**: `nfs-anime` (used by sonarr, plex, jellyfin)
+- **Torrent Downloads**: `nfs-torrent` (used by qbittorrent, radarr, sonarr, lidarr)
 
 Apply NFS PVCs before deploying applications:
 
-```bash
-kubectl apply -f ../storage/nfs-shares/nfs-movies.yaml
-kubectl apply -f ../storage/nfs-shares/nfs-tv.yaml
-kubectl apply -f ../storage/nfs-shares/nfs-music.yaml
-kubectl apply -f ../storage/nfs-shares/nfs-downloads.yaml
+**Media libraries:**
+```fish
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/media-automation/nfs/nfs-movies.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/media-automation/nfs/nfs-tv.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/media-automation/nfs/nfs-anime.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/media-automation/nfs/nfs-music.yaml
 ```
 
-See [NFS storage README](../storage/nfs-shares/README.md) for NFS provisioner setup.
+**Torrent downloads:**
+```fish
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/media-automation/qbittorrent/nfs/nfs-torrent.yaml
+```
+
+See [Media NFS README](nfs/README.md) for details and [NFS storage guide](../storage/nfs-shares/README.md) for troubleshooting.
 
 ### Ingress Rules
 

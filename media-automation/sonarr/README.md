@@ -11,6 +11,18 @@ kubectl apply -f sonarr-anime-pvc.yaml
 
 This creates Longhorn-backed persistent volumes with automatic replication and snapshot support.
 
+## NFS Media Libraries
+
+Apply shared media NFS volumes before deploying Sonarr:
+
+```fish
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/media-automation/nfs/nfs-tv.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/media-automation/nfs/nfs-anime.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/media-automation/qbittorrent/nfs/nfs-torrent.yaml
+```
+
+See [Media NFS Guide](../nfs/README.md) for details.
+
 ## Add repository
 
 ```bash

@@ -217,6 +217,21 @@ kubectl apply -f pms-config-pvc.yaml
 
 This creates a Longhorn-backed persistent volume with automatic replication and snapshot support.
 
+## NFS Media Libraries
+
+Plex requires namespace-specific NFS PVCs for media libraries. Apply these before deploying Plex:
+
+```fish
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/plex/nfs/nfs-movies-plex.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/plex/nfs/nfs-tv-plex.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/plex/nfs/nfs-anime-plex.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/plex/nfs/nfs-music-plex.yaml
+```
+
+These PVCs reference the same NFS paths as the base media libraries but are created in the `plex` namespace (Kubernetes PVCs cannot be shared across namespaces).
+
+See [Plex NFS Guide](nfs/README.md) for details.
+
 ## Plex installation
 
 1. Add the Plex helm repo:

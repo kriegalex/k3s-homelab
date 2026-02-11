@@ -1,5 +1,19 @@
 # Immich
 
+## NFS Photo Storage
+
+Apply NFS volumes for Immich photo and video storage:
+
+```fish
+# Immich's own storage (read-write)
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/immich/nfs/nfs-immich.yaml
+
+# Nextcloud photos (read-only) - optional, for importing from Nextcloud
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/immich/nfs/nfs-nextcloud-ro.yaml
+```
+
+See [Immich NFS README](nfs/README.md) for details.
+
 ## Setup Secrets
 
 ⚠️ **IMPORTANT:** Database password must be stored in a Kubernetes secret.

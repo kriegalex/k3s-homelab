@@ -11,9 +11,10 @@ The cluster provides three storage solutions:
 3. **NFS Dynamic Provisioning** - Optional automated provisioning via NFS Subdir External Provisioner
 
 Configuration files:
-- Static NFS PV/PVC definitions: `nfs-storage/*.yaml`
+- Media libraries: `media-automation/nfs/` (base) and `plex/nfs/` (Plex namespace)
+- App-specific NFS storage: Located in each application's `nfs/` directory
 - Longhorn configuration: `storage/longhorn/custom-values.yaml`
-- NFS Provisioner config: `nfs-storage/helm-values-nfs-subdir-external-provisioner.yaml`
+- NFS Provisioner config: `storage/nfs-shares/provisioner/`
 
 ## Storage Options Comparison
 
@@ -81,83 +82,67 @@ spec:
 
 ### Available NFS Shares
 
-The following static NFS PV/PVC pairs are available in this directory:
+Static NFS PV/PVC pairs are organized by usage:
 
 #### Media Libraries
-- `nfs-anime` → `/mnt/user/anime`
-- `nfs-tv` → `/mnt/user/tv`
+**Base libraries** (for Radarr, Sonarr, Lidarr, Jellyfin in `default` namespace):
+Located in `media-automation/nfs/`:
 - `nfs-movies` → `/mnt/user/movies`
+- `nfs-tv` → `/mnt/user/tv`
+- `nfs-anime` → `/mnt/user/anime`
+- `nfs-music` → `/mnt/user/music`
 
-#### Torrent
-- `nfs-torrent` → `/mnt/user/torrent`
+**Plex variants** (for Plex in `plex` namespace):
+Located in `plex/nfs/`:
+- `nfs-movies-plex` → `/mnt/user/movies`
+- `nfs-tv-plex` → `/mnt/user/tv`
+- `nfs-anime-plex` → `/mnt/user/anime`
+- `nfs-music-plex` → `/mnt/user/music`
 
-#### Content Applications
-- `nfs-nextcloud` → `/mnt/user/nextcloud`
-- `nfs-immich` → `/mnt/user/immich`
-- `nfs-gitea` → `/mnt/user/gitea`
-- `nfs-paperless` → `/mnt/user/paperless`
+#### Application-Specific Storage
+Located in each application's `nfs/` subdirectory:
+- `nfs-torrent` → `/mnt/user/torrent` (media-automation/qbittorrent/nfs/)
+- `nfs-nextcloud` → `/mnt/user/nextcloud` (productivity/nextcloud/nfs/)
+- `nfs-immich` → `/mnt/user/immich` (immich/nfs/)
+- `nfs-gitea` → `/mnt/user/gitea` (productivity/gitea/nfs/)
+- `nfs-paperless` → `/mnt/user/paperless` (productivity/paperless-ngx/nfs/)
+- `nfs-backup` → `/mnt/user/backup` (backup/k8up/nfs/)
 
-#### Backup
-- `nfs-backup` → `/mnt/user/backup`
+See [NFS Storage Organization](MIGRATION.md) for the full directory structure.
 
 ### Deployment Instructions
 
 **Prerequisites:**
-Install NFS client tools on all worker nodes:
+Install NFS client tools on all worker nodes (requires sudo):
 
-```bash
+```
 sudo apt-get install -y nfs-common
 ```
 
-**Apply PV/PVC manifests by category:**
+**Apply NFS storage:**
 
-**Media:**
-```bash
-kubectl apply -f nfs-anime-pv.yaml
-kubectl apply -f nfs-anime-pvc.yaml
+**Media Libraries** - See [Media Automation NFS](../../media-automation/nfs/README.md) and [Plex NFS](../../plex/nfs/README.md):
+```fish
+# Base libraries (for Radarr, Sonarr, Lidarr, Jellyfin)
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/media-automation/nfs/nfs-movies.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/media-automation/nfs/nfs-tv.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/media-automation/nfs/nfs-anime.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/media-automation/nfs/nfs-music.yaml
 
-kubectl apply -f nfs-tv-pv.yaml
-kubectl apply -f nfs-tv-pvc.yaml
-
-kubectl apply -f nfs-movies-pv.yaml
-kubectl apply -f nfs-movies-pvc.yaml
+# Plex variants (for Plex in plex namespace)
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/plex/nfs/nfs-movies-plex.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/plex/nfs/nfs-tv-plex.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/plex/nfs/nfs-anime-plex.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/plex/nfs/nfs-music-plex.yaml
 ```
 
-**Torrent:**
-```bash
-kubectl apply -f nfs-torrent-pv.yaml
-kubectl apply -f nfs-torrent-pvc.yaml
-```
-
-**Nextcloud:**
-```bash
-kubectl apply -f nfs-nextcloud-pv.yaml
-kubectl apply -f nfs-nextcloud-pvc.yaml
-```
-
-**Immich:**
-```bash
-kubectl apply -f nfs-immich-pv.yaml
-kubectl -n immich apply -f nfs-immich-pvc.yaml
-```
-
-**Gitea:**
-```bash
-kubectl apply -f nfs-gitea-pv.yaml
-kubectl apply -f nfs-gitea-pvc.yaml
-```
-
-**Paperless:**
-```bash
-kubectl apply -f nfs-paperless-pv.yaml
-kubectl apply -f nfs-paperless-pvc.yaml
-```
-
-**Backup:**
-```bash
-kubectl apply -f nfs-backup-pv.yaml
-kubectl apply -f nfs-backup-pvc.yaml
-```
+**Application-Specific Storage** - See each application's `nfs/README.md`:
+- Nextcloud: `productivity/nextcloud/nfs/README.md`
+- Immich: `immich/nfs/README.md`
+- Gitea: `productivity/gitea/nfs/README.md`
+- Paperless: `productivity/paperless-ngx/nfs/README.md`
+- qBittorrent: `media-automation/qbittorrent/nfs/README.md`
+- k8up: `backup/k8up/nfs/README.md`
 
 ### Using in Applications
 
@@ -345,10 +330,9 @@ sudo umount /mnt/test
 
 Uses static NFS for media, Longhorn or hostPath for config:
 
-```bash
+```fish
 # Apply media library PVCs
-kubectl apply -f nfs-movies-pv.yaml
-kubectl apply -f nfs-movies-pvc.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/media-automation/nfs/nfs-movies.yaml
 
 # Install with Helm
 helm install radarr k8s-at-home/radarr -f radarr/custom-values.yaml
@@ -372,10 +356,9 @@ persistence:
 
 Uses static NFS for data:
 
-```bash
+```fish
 # Apply Nextcloud NFS PVC
-kubectl apply -f nfs-nextcloud-pv.yaml
-kubectl apply -f nfs-nextcloud-pvc.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/productivity/nextcloud/nfs/nfs-nextcloud.yaml
 
 # Install with Helm
 helm install nextcloud nextcloud/nextcloud -f nextcloud/custom-values.yaml

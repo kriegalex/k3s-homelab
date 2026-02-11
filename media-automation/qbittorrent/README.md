@@ -12,6 +12,16 @@ kubectl apply -f qbittorrent-config-pvc.yaml
 
 This creates a Longhorn-backed persistent volume with automatic replication and snapshot support.
 
+## NFS Torrent Storage
+
+Apply NFS volume for torrent downloads:
+
+```fish
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/media-automation/qbittorrent/nfs/nfs-torrent.yaml
+```
+
+See [qBittorrent NFS README](nfs/README.md) for details.
+
 ## Prerequisites
 Before deploying this chart, ensure your Kubernetes cluster meets the following requirements:
 

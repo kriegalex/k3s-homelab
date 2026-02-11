@@ -62,15 +62,21 @@ Several applications use PostgreSQL via [CloudNativePG](../database/cloudnative-
 
 Applications using shared NFS storage:
 
-- **Nextcloud**: `nfs-nextcloud-data` for user files
-- **Paperless-ngx**: `nfs-paperless-media` for document storage
+- **Nextcloud**: `nfs-nextcloud` for user files
+- **Paperless-ngx**: `nfs-paperless` for document storage
+- **Gitea**: `nfs-gitea` for repository data
 
 Apply NFS PVCs before deployment:
 
-```bash
-kubectl apply -f ../storage/nfs-shares/nfs-nextcloud-data.yaml
-kubectl apply -f ../storage/nfs-shares/nfs-paperless-media.yaml
+```fish
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/productivity/nextcloud/nfs/nfs-nextcloud.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/productivity/paperless-ngx/nfs/nfs-paperless-media.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/productivity/paperless-ngx/nfs/nfs-paperless-consume.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/productivity/paperless-ngx/nfs/nfs-paperless-export.yaml
+kubectl apply -f /home/mlourenco/workspace/k3s-homelab/productivity/gitea/nfs/nfs-gitea.yaml
 ```
+
+See each application's `nfs/README.md` for details.
 
 ### Ingress Rules
 
@@ -92,9 +98,10 @@ Other applications (n8n, paperless-ngx, actual-budget) may have ingress defined 
    ```
 
 2. **NFS Storage** (if using shared storage):
-   ```bash
-   kubectl apply -f ../storage/nfs-shares/nfs-nextcloud-data.yaml
-   kubectl apply -f ../storage/nfs-shares/nfs-paperless-media.yaml
+   ```fish
+   kubectl apply -f /home/mlourenco/workspace/k3s-homelab/productivity/nextcloud/nfs/nfs-nextcloud.yaml
+   kubectl apply -f /home/mlourenco/workspace/k3s-homelab/productivity/paperless-ngx/nfs/nfs-paperless.yaml
+   kubectl apply -f /home/mlourenco/workspace/k3s-homelab/productivity/gitea/nfs/nfs-gitea.yaml
    ```
 
 3. **Deploy Applications**:
