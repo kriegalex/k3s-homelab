@@ -2,28 +2,29 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: nfs-immich
+  name: nfs-paperless-media
 spec:
   storageClassName: ""
   capacity:
-    storage: 1Mi
+    storage: 100Gi
   accessModes:
     - ReadWriteMany
   nfs:
     server: 10.0.0.2
-    path: "/mnt/user/immich"
+    path: "/mnt/user/paperless/media"
   mountOptions:
     - nfsvers=4.2
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: nfs-immich
+  name: nfs-paperless-media
+  namespace: paperless
 spec:
   accessModes:
     - ReadWriteMany
   storageClassName: ""
   resources:
     requests:
-      storage: 1Mi
-  volumeName: nfs-immich
+      storage: 100Gi
+  volumeName: nfs-paperless-media
