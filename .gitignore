@@ -23,6 +23,8 @@ CLAUDE.md
 !**/secrets-template.yaml
 **/*secrets*.yaml.bak
 **/s3-backup-credentials-secret.yaml
+**/*-secret.yaml
+**/*-secrets.yaml
 
 # Personal/local values files that may contain secrets
 **/custom-values-personal.yaml

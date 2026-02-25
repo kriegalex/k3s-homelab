@@ -101,6 +101,135 @@ kubectl create secret generic n8n-db-backup-credentials -n n8n \
   --from-literal=ACCESS_SECRET_KEY=your_secret_key
 ```
 
+#### Scheduled Backups
+
+To schedule automated weekly backups, apply a `ScheduledBackup` resource:
+
+```yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: n8n-scheduled-backup
+  namespace: n8n
+spec:
+  backupOwnerReference: self
+  cluster:
+    name: n8n-db
+  immediate: true
+  method: barmanObjectStore
+  schedule: "0 4 0 ? * MON"  # Weekly on Mondays at 00:04 (Quartz cron format)
+```
+
+```bash
+kubectl apply -f n8n-scheduled-backup.yaml
+kubectl get scheduledbackup -n n8n
+```
+
+#### Manual Backup
+
+To trigger an on-demand backup immediately:
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: n8n-db-backup-$(date +%Y%m%d-%H%M%S)
+  namespace: n8n
+spec:
+  cluster:
+    name: n8n-db
+  method: barmanObjectStore
+EOF
+```
+
+Check backup status:
+
+```bash
+# List all backups
+kubectl get backup -n n8n
+
+# Inspect a specific backup
+kubectl describe backup <backup-name> -n n8n
+```
+
+#### Restore from Backup
+
+**Restore latest backup (in-place replacement):**
+
+This replaces the existing cluster with a fresh one bootstrapped from S3.
+
+1. Scale down n8n to avoid database writes during restore:
+   ```bash
+   helm -n n8n upgrade --install n8n oci://8gears.container-registry.com/library/n8n -f custom-values.yaml --set main.replicaCount=0
+   ```
+
+2. Delete the existing CNPG cluster (this also removes PVCs):
+   ```bash
+   kubectl delete cluster n8n-db -n n8n
+   ```
+
+3. Wait for PVCs to be removed (or delete manually if they linger):
+   ```bash
+   kubectl get pvc -n n8n
+   kubectl delete pvc <pvc-name> -n n8n  # if needed
+   ```
+
+4. Apply a new Cluster manifest that recovers from S3:
+   ```yaml
+   apiVersion: postgresql.cnpg.io/v1
+   kind: Cluster
+   metadata:
+     name: n8n-db
+     namespace: n8n
+   spec:
+     instances: 3
+     storage:
+       storageClass: longhorn-single-replica
+       size: 20Gi
+     bootstrap:
+       recovery:
+         source: n8n-db-backup
+     externalClusters:
+       - name: n8n-db-backup
+         barmanObjectStore:
+           destinationPath: "s3://n8n-backups/"
+           endpointURL: "http://10.0.0.7:8010"
+           s3Credentials:
+             accessKeyId:
+               name: n8n-db-backup-credentials
+               key: ACCESS_KEY_ID
+             secretAccessKey:
+               name: n8n-db-backup-credentials
+               key: ACCESS_SECRET_KEY
+           wal:
+             compression: bzip2
+   ```
+
+5. Wait for the cluster to become ready:
+   ```bash
+   kubectl wait --for=condition=Ready cluster/n8n-db -n n8n --timeout=600s
+   ```
+
+6. Redeploy n8n at full replica count:
+   ```bash
+   helm -n n8n upgrade --install n8n oci://8gears.container-registry.com/library/n8n -f custom-values.yaml
+   ```
+
+**Point-in-time recovery (PITR):**
+
+To recover to a specific moment in time, add `recoveryTarget` to the bootstrap spec above:
+
+```yaml
+    bootstrap:
+      recovery:
+        source: n8n-db-backup
+        recoveryTarget:
+          targetTime: "2026-02-24 03:00:00"  # UTC timestamp
+```
+
+All other steps remain the same as the latest-backup restore procedure above.
+
 ### Ingress
 
 Edit the values.yaml file to set your domain in the `ingress.hosts` section.

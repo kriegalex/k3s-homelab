@@ -98,6 +98,53 @@ kubectl delete -f immich-ml-data-pvc.yaml -f immich-ml-data-pv.yaml \
 kubectl delete pvc data-immich-postgresql-0
 ```
 
+## Database Backups (CloudNativePG)
+
+The PostgreSQL cluster (`immich-db`) is configured to automatically back up to S3-compatible storage:
+
+- S3 endpoint: `http://10.0.0.7:8010`
+- Bucket: `s3://immich-backups/`
+- Credentials secret: `immich-s3-backup-credentials`
+- Retention: 30 days
+
+Before deploying, create the credentials secret:
+
+```bash
+kubectl create secret generic immich-s3-backup-credentials -n immich \
+  --from-literal=ACCESS_KEY_ID=your_access_key \
+  --from-literal=ACCESS_SECRET_KEY=your_secret_key
+```
+
+### Scheduled Backups
+
+Apply the weekly scheduled backup (Mondays at 00:04):
+
+```bash
+kubectl apply -f immich-scheduled-backup.yml
+kubectl get scheduledbackup -n immich
+```
+
+### Manual Backup
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: immich-db-backup-$(date +%Y%m%d-%H%M%S)
+  namespace: immich
+spec:
+  cluster:
+    name: immich-db
+  method: barmanObjectStore
+EOF
+
+kubectl get backup -n immich
+kubectl describe backup <backup-name> -n immich
+```
+
+> **Note:** Immich uses a custom PostgreSQL image (`cloudnative-vectorchord`) with special extensions. CNPG bootstrap recovery is **not supported** for restore — use the `pg_dumpall` method below instead. The S3 backup still provides WAL archiving and point-in-time protection.
+
 ## Backup & Restore
 
 Always refer to the instructions here as a baseline:

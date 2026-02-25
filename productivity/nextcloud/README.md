@@ -143,7 +143,52 @@ redis:
     existingSecretPasswordKey: redis-password
 ```
 
-## (optional) Backup and restore existing docker 
+## Database Backups (CloudNativePG)
+
+The PostgreSQL cluster (`nextcloud-db`) is configured to automatically back up to S3-compatible storage:
+
+- S3 endpoint: `http://10.0.0.7:8010`
+- Bucket: `s3://nextcloud-backups/`
+- Credentials secret: `nextcloud-s3-backup-credentials`
+- Retention: 30 days
+
+Before deploying, create the credentials secret:
+
+```bash
+kubectl create secret generic nextcloud-s3-backup-credentials -n nextcloud \
+  --from-literal=ACCESS_KEY_ID=your_access_key \
+  --from-literal=ACCESS_SECRET_KEY=your_secret_key
+```
+
+### Scheduled Backups
+
+Apply the weekly scheduled backup (Mondays at 00:04):
+
+```bash
+kubectl apply -f nextcloud-scheduled-backup.yaml
+kubectl get scheduledbackup -n nextcloud
+```
+
+### Manual Backup
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: nextcloud-db-backup-$(date +%Y%m%d-%H%M%S)
+  namespace: nextcloud
+spec:
+  cluster:
+    name: nextcloud-db
+  method: barmanObjectStore
+EOF
+
+kubectl get backup -n nextcloud
+kubectl describe backup <backup-name> -n nextcloud
+```
+
+## (optional) Backup and restore existing docker
 
 ### Backup
 

@@ -1,0 +1,45 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: paperless-db
+  namespace: paperless
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.2
+
+  storage:
+    storageClass: longhorn-single-replica
+    size: 10Gi
+
+  resources:
+    requests:
+      memory: 150Mi
+      cpu: 150m
+    limits:
+      memory: 500Mi
+      cpu: 300m
+
+  backup:
+    retentionPolicy: "30d"
+    target: prefer-standby
+    barmanObjectStore:
+      destinationPath: "s3://paperless-backups/"
+      endpointURL: "http://10.0.0.7:8010"
+      s3Credentials:
+        accessKeyId:
+          name: paperless-s3-backup-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: paperless-s3-backup-credentials
+          key: ACCESS_SECRET_KEY
+      wal:
+        compression: bzip2
+      data:
+        compression: bzip2
+
+  bootstrap:
+    initdb:
+      database: paperless
+      owner: paperless
+      secret:
+        name: paperless-db-credentials

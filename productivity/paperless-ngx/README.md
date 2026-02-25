@@ -146,6 +146,51 @@ kubectl -n paperless delete -f paperless-media-pvc.yaml -f paperless-media-pv.ya
   -f paperless-psql-pvc.yaml -f paperless-psql-pv.yaml
 ```
 
-## Backup / restore
+## Database Backups (CloudNativePG)
+
+The PostgreSQL cluster (`paperless-db`) is configured to automatically back up to S3-compatible storage:
+
+- S3 endpoint: `http://10.0.0.7:8010`
+- Bucket: `s3://paperless-backups/`
+- Credentials secret: `paperless-s3-backup-credentials`
+- Retention: 30 days
+
+Before deploying, create the credentials secret:
+
+```bash
+kubectl create secret generic paperless-s3-backup-credentials -n paperless \
+  --from-literal=ACCESS_KEY_ID=your_access_key \
+  --from-literal=ACCESS_SECRET_KEY=your_secret_key
+```
+
+### Scheduled Backups
+
+Apply the weekly scheduled backup (Mondays at 00:04):
+
+```bash
+kubectl apply -f paperless-scheduled-backup.yaml
+kubectl get scheduledbackup -n paperless
+```
+
+### Manual Backup
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: paperless-db-backup-$(date +%Y%m%d-%H%M%S)
+  namespace: paperless
+spec:
+  cluster:
+    name: paperless-db
+  method: barmanObjectStore
+EOF
+
+kubectl get backup -n paperless
+kubectl describe backup <backup-name> -n paperless
+```
+
+## Backup / restore (application-level)
 
 See the [documentation](https://docs.paperless-ngx.com/administration/). Paperless-ngx has a built-in mechanism for backuping and restoring.
