@@ -55,7 +55,7 @@ echo ""
 # Define manual mappings for releases that don't match directory names
 declare -A MANUAL_MAPPINGS=(
     ["plex-media-server"]="plex"
-    ["ingress-nginx"]="ingress/ingress-nginx"
+    ["traefik"]="ingress/traefik"
     ["cert-manager"]="ingress/cert-manager"
     ["nfs-subdir-external-provisioner"]="storage/nfs-shares/provisioner"
     ["longhorn"]="storage/longhorn"
@@ -66,7 +66,7 @@ declare -A MANUAL_MAPPINGS=(
     ["sonarr-anime"]="media-automation/sonarr"
     ["lidarr"]="media-automation/lidarr"
     ["prowlarr"]="media-automation/prowlarr"
-    ["overseerr"]="media-automation/overseerr"
+    ["seerr"]="media-automation/seerr"
     ["qbittorrent"]="media-automation/qbittorrent"
     ["flaresolverr"]="media-automation/flaresolverr"
     # Game servers

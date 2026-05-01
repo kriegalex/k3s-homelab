@@ -11,6 +11,9 @@ CLAUDE.md
 **/helm-values.yaml
 **/helm-values-*.yaml
 
+# Live-state captures used during reconciliation (kubectl/helm dumps)
+ingress/traefik/_live/
+
 # Real values files (unsanitized) - use values.yaml for committed/sanitized versions
 **/custom-values.yaml
 **/custom-values-*.yaml

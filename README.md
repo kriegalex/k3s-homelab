@@ -11,7 +11,7 @@ This repository contains Helm-based deployment configurations for both infrastru
 Core cluster infrastructure for ingress, storage, database, backup, and monitoring:
 
 - **Ingress Layer**
-  - [ingress-nginx](ingress/ingress-nginx/) - Kubernetes Ingress controller using NGINX
+  - [traefik](ingress/traefik/) - Traefik v3 Ingress controller (replaced ingress-nginx in April 2026)
   - [cert-manager](ingress/cert-manager/) - X.509 certificate management (Let's Encrypt, Infomaniak, Route53)
 
 - **Storage Layer**
@@ -36,7 +36,7 @@ Application deployments organized by category:
 
 - **Media Automation Stack:** [media-automation/](media-automation/)
   - [radarr](media-automation/radarr/), [sonarr](media-automation/sonarr/), [lidarr](media-automation/lidarr/)
-  - [prowlarr](media-automation/prowlarr/), [overseerr](media-automation/overseerr/)
+  - [prowlarr](media-automation/prowlarr/), [seerr](media-automation/seerr/) (Overseerr fork), [clonarr](media-automation/clonarr/) (TRaSH-Guides sync)
   - [qbittorrent](media-automation/qbittorrent/), [flaresolverr](media-automation/flaresolverr/)
 - **Game Servers:** [game-servers/](game-servers/)
   - [palworld-server](game-servers/palworld-server/), [satisfactory-server](game-servers/satisfactory-server/)
@@ -58,7 +58,7 @@ Please have a look at the main [INSTALL.md](./INSTALL.md).
 
 ### Recommended Installation Order
 
-1. **Ingress:** [ingress-nginx](ingress/ingress-nginx/) → [cert-manager](ingress/cert-manager/)
+1. **Ingress:** [cert-manager](ingress/cert-manager/) → [traefik](ingress/traefik/)
 2. **Storage:** [longhorn](storage/longhorn/) and/or [nfs-client](storage/nfs-shares/nfs-client/)
 3. **Database:** [cloudnative-pg](database/cloudnative-pg/)
 4. **Monitoring:** [prometheus](monitoring/)
@@ -71,20 +71,23 @@ Each infrastructure component has a comprehensive README with:
 - Troubleshooting guides
 - Migration notes from k3s-ansible (if applicable)
 
-### Quick Start: ingress-nginx
+### Quick Start: Traefik
 
 ```bash
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo add traefik https://traefik.github.io/charts
 helm repo update
 
-helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
-  --namespace ingress-nginx \
+helm upgrade --install traefik traefik/traefik \
+  --namespace traefik \
   --create-namespace \
-  --version 4.12.0 \
-  -f ingress/ingress-nginx/custom-values.yaml
+  --version 39.0.8 \
+  -f ingress/traefik/values.yaml
+
+kubectl apply -f ingress/traefik/ingressroute-dashboard.yaml
+kubectl apply -f ingress/traefik/middlewares/
 ```
 
-See [ingress-nginx README](ingress/ingress-nginx/README.md) for full details.
+See [Traefik README](ingress/traefik/README.md) for full details.
 
 ## Setting up applications
 

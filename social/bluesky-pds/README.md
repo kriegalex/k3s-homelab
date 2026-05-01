@@ -182,12 +182,13 @@ service:
 # Ingress - REQUIRED for PDS to work
 ingress:
   enabled: true
-  className: "nginx"
+  className: "traefik"
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    # Increase body size for media uploads
-    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    # HTTP→HTTPS redirect via Traefik Middleware (ingress/traefik/middlewares/redirect-https.yaml).
+    traefik.ingress.kubernetes.io/router.middlewares: "traefik-redirect-https@kubernetescrd"
+    # Body size: Traefik streams request bodies by default with no cap, so
+    # media uploads are unconstrained without an explicit Buffering middleware.
   hosts:
     # Main PDS endpoint
     - host: pds.example.com

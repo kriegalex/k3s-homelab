@@ -86,7 +86,7 @@ image:
 # Ingress configuration
 ingress:
   enabled: true
-  className: "nginx"
+  className: "traefik"
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
   hosts:

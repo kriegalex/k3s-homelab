@@ -227,7 +227,7 @@ service:
 # Ingress for RPC access (optional)
 ingress:
   enabled: false
-  className: "nginx"
+  className: "traefik"
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
   hosts:
@@ -365,7 +365,7 @@ mempool:
       storageClass: "longhorn"
   ingress:
     enabled: true
-    className: "nginx"
+    className: "traefik"
     annotations:
       cert-manager.io/cluster-issuer: "letsencrypt-prod"
     hosts:

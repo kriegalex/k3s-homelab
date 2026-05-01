@@ -46,7 +46,7 @@ Complete step-by-step guide to deploy a production-ready Kubernetes homelab stac
                         ↓
 ┌─────────────────────────────────────────────────────┐
 │  k8s-homelab: Infrastructure + Applications         │
-│  - Ingress (nginx, cert-manager)                    │
+│  - Ingress (Traefik, cert-manager)                  │
 │  - Storage (Longhorn, NFS)                          │
 │  - Database (CloudNativePG)                         │
 │  - Backup (k8up)                                    │
@@ -115,9 +115,9 @@ Infrastructure components provide the foundation for all applications. Deploy th
 
 The ingress layer handles external HTTP/HTTPS traffic routing to your services.
 
-#### 1.1. ingress-nginx - NGINX Ingress Controller
+#### 1.1. Traefik - Ingress Controller
 
-**What it does:** Routes external traffic to Kubernetes services based on hostnames and paths.
+**What it does:** Routes external traffic to Kubernetes services based on hostnames and paths. Replaced ingress-nginx in April 2026; see `~/workspace/traefik-migration/MIGRATION_GUIDE.md` for the historical migration playbook.
 
 **Prerequisites:**
 - MetalLB or another LoadBalancer provider (from k3s-ansible)
@@ -126,34 +126,33 @@ The ingress layer handles external HTTP/HTTPS traffic routing to your services.
 
 ```bash
 # Add Helm repository
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo add traefik https://traefik.github.io/charts
 helm repo update
 
-# Install ingress-nginx
-helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
-  --namespace ingress-nginx \
+# Install Traefik
+helm upgrade --install traefik traefik/traefik \
+  --namespace traefik \
   --create-namespace \
-  --version 4.12.0 \
-  -f ingress/ingress-nginx/custom-values.yaml
+  --version 39.0.8 \
+  -f ingress/traefik/values.yaml
+
+# Apply the dashboard IngressRoute and shared middlewares
+kubectl apply -f ingress/traefik/ingressroute-dashboard.yaml
+kubectl apply -f ingress/traefik/middlewares/
 
 # Verify installation
-kubectl get pods -n ingress-nginx
-kubectl get svc -n ingress-nginx ingress-nginx-controller
-
-# Wait for LoadBalancer IP assignment
-kubectl wait --namespace ingress-nginx \
-  --for=condition=ready pod \
-  --selector=app.kubernetes.io/component=controller \
-  --timeout=120s
+kubectl get pods -n traefik
+kubectl get svc -n traefik traefik
+kubectl get ingressclass traefik
 ```
 
 **Verify:**
 ```bash
-# Should show EXTERNAL-IP from MetalLB
-kubectl get svc -n ingress-nginx ingress-nginx-controller
+# Should show EXTERNAL-IP from MetalLB (10.0.0.20 in this homelab)
+kubectl get svc -n traefik traefik
 ```
 
-**Details:** See [ingress-nginx README](ingress/ingress-nginx/README.md) for configuration options, security settings, and troubleshooting.
+**Details:** See [Traefik README](ingress/traefik/README.md) for the chart pinning, middleware inventory, and per-Ingress conventions.
 
 ---
 
@@ -162,7 +161,7 @@ kubectl get svc -n ingress-nginx ingress-nginx-controller
 **What it does:** Automates SSL/TLS certificate issuance and renewal from Let's Encrypt using DNS challenges.
 
 **Prerequisites:**
-- ingress-nginx installed
+- Traefik installed (or any Ingress controller — cert-manager is controller-agnostic)
 - DNS provider account (Infomaniak, Route53, Cloudflare, or DuckDNS)
 - DNS provider API credentials
 
@@ -941,9 +940,9 @@ kubectl get ingress -n media | grep lidarr
 
 ---
 
-#### Overseerr - Media Request Management
+#### Seerr - Media Request Management (Overseerr fork)
 
-**What it does:** User-friendly interface for requesting movies and TV shows (integrates with Radarr/Sonarr).
+**What it does:** User-friendly interface for requesting movies and TV shows (integrates with Radarr/Sonarr). The active fork of Overseerr; reuses the legacy `overseerr-config` PVC so no data migration is required.
 
 **Prerequisites:**
 - Radarr and Sonarr installed
@@ -954,21 +953,24 @@ kubectl get ingress -n media | grep lidarr
 
 ```bash
 # Use media namespace (created for Prowlarr)
-helm repo add k8s-at-home https://k8s-at-home.com/charts/
+# Apply the Longhorn-backed PVC (preserves the original Overseerr volume)
+kubectl apply -f media-automation/seerr/overseerr-config-pvc.yaml
+
+helm repo add k8s-charts https://kriegalex.github.io/k8s-charts/
 helm repo update
 
-helm upgrade --install overseerr k8s-at-home/overseerr \
+helm upgrade --install seerr k8s-charts/seerr-chart \
   --namespace media \
-  -f overseerr/custom-values.yaml
+  -f media-automation/seerr/custom-values.yaml
 ```
 
 **Verify:**
 ```bash
-kubectl get pods -n media | grep overseerr
-kubectl get ingress -n media | grep overseerr
+kubectl get pods -n media | grep seerr
+kubectl get ingress -n media | grep seerr
 ```
 
-**Details:** See [Overseerr README](overseerr/README.md).
+**Details:** See [seerr README](media-automation/seerr/README.md).
 
 ---
 
@@ -1364,9 +1366,10 @@ metadata:
   namespace: my-app
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Optional: force HTTP→HTTPS via the cluster-wide Traefik Middleware.
+    # traefik.ingress.kubernetes.io/router.middlewares: "traefik-redirect-https@kubernetescrd"
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
   - hosts:
     - app.yourdomain.com
@@ -1385,8 +1388,8 @@ spec:
 ```
 
 **What happens:**
-1. DNS resolves `app.yourdomain.com` to ingress-nginx LoadBalancer IP
-2. ingress-nginx routes traffic to `my-app` service
+1. DNS resolves `app.yourdomain.com` to the Traefik LoadBalancer IP
+2. Traefik routes traffic to `my-app` service
 3. cert-manager automatically obtains and renews TLS certificate
 4. Traffic is encrypted end-to-end
 
@@ -1607,8 +1610,8 @@ Cannot access application via domain name.
 kubectl get ingress -n <namespace>
 # Should show ADDRESS (LoadBalancer IP)
 
-# Check ingress-nginx controller
-kubectl get pods -n ingress-nginx
+# Check Traefik controller
+kubectl get pods -n traefik
 # Should be Running
 
 # Check cert-manager certificates
@@ -1712,7 +1715,7 @@ See [Longhorn README](storage/longhorn/README.md) for detailed troubleshooting.
 
 For detailed troubleshooting of specific components, see their READMEs:
 
-- **Ingress issues:** [ingress-nginx README](ingress/ingress-nginx/README.md)
+- **Ingress issues:** [Traefik README](ingress/traefik/README.md)
 - **Certificate issues:** [cert-manager README](ingress/cert-manager/README.md)
 - **Storage issues:** [Longhorn README](storage/longhorn/README.md) or [NFS README](storage/nfs-shares/nfs-client/README.md)
 - **Database issues:** [CloudNativePG README](database/cloudnative-pg/README.md)

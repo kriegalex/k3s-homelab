@@ -173,7 +173,7 @@ Set `enabled: true` if using Kubernetes network policies. The `type: "k3s"` opti
 ```yaml
 ingress:
   enabled: false                        # Set to true to expose UI via ingress
-  ingressClassName: nginx
+  ingressClassName: traefik
   host: longhorn.yourdomain.com         # CHANGE_ME
   tls: false                            # Set to true to enable TLS
   tlsSecret: longhorn-tls
@@ -483,18 +483,23 @@ kubectl get ingress -n longhorn-system
 metadata:
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/auth-type: basic
-    nginx.ingress.kubernetes.io/auth-secret: longhorn-basic-auth
-    nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required'
+    # Force HTTPS + chain a BasicAuth Middleware. Both Middlewares live in
+    # ingress/traefik/middlewares/. Create the basic-auth one yourself:
+    #   apiVersion: traefik.io/v1alpha1
+    #   kind: Middleware
+    #   metadata: { name: longhorn-basic-auth, namespace: longhorn-system }
+    #   spec:
+    #     basicAuth:
+    #       secret: longhorn-basic-auth   # Secret with `users` key (htpasswd)
+    traefik.ingress.kubernetes.io/router.middlewares: "traefik-redirect-https@kubernetescrd,longhorn-system-longhorn-basic-auth@kubernetescrd"
 ```
 
-Create basic auth secret:
+Create basic auth secret (Traefik expects the htpasswd content under the `users` key):
 
 ```bash
-htpasswd -c auth admin
+htpasswd -nb admin '<password>' > auth
 kubectl create secret generic longhorn-basic-auth \
-  --from-file=auth \
+  --from-file=users=auth \
   -n longhorn-system
 ```
 
