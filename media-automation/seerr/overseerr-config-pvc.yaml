@@ -1,3 +1,5 @@
+# PVC name kept as `overseerr-config` to preserve the existing Longhorn volume
+# and avoid a data copy during the Overseerr → Seerr migration.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
