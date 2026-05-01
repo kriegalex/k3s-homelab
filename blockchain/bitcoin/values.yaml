@@ -185,10 +185,11 @@ mempool:
   # Ingress configuration
   ingress:
     enabled: false  # Set to true to expose via ingress
-    className: "nginx"
+    className: "traefik"
     annotations:
       cert-manager.io/cluster-issuer: "letsencrypt-prod"
-      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      # HTTP→HTTPS redirect via Traefik Middleware (ingress/traefik/middlewares/redirect-https.yaml).
+      traefik.ingress.kubernetes.io/router.middlewares: "traefik-redirect-https@kubernetescrd"
     hosts:
       - host: mempool.example.com
         paths:
@@ -202,14 +203,14 @@ mempool:
 ## Ingress Configuration for Bitcoin RPC - OPTIONAL
 ingress:
   enabled: false  # Set to true to expose Bitcoin RPC via HTTPS
-  className: "nginx"
+  className: "traefik"
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
-    # Consider adding basic auth for RPC access:
-    # nginx.ingress.kubernetes.io/auth-type: basic
-    # nginx.ingress.kubernetes.io/auth-secret: bitcoin-basic-auth
+    # HTTP→HTTPS redirect via Traefik Middleware (ingress/traefik/middlewares/redirect-https.yaml).
+    traefik.ingress.kubernetes.io/router.middlewares: "traefik-redirect-https@kubernetescrd"
+    # For basic auth, create a Traefik BasicAuth Middleware (referencing a
+    # Secret with htpasswd content) and chain it into the annotation above:
+    #   traefik.ingress.kubernetes.io/router.middlewares: "traefik-redirect-https@kubernetescrd,<ns>-bitcoin-basic-auth@kubernetescrd"
   hosts:
     - host: bitcoin.example.com
       paths:

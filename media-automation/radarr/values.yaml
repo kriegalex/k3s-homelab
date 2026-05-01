@@ -26,9 +26,8 @@ image:
   repository: ghcr.io/hotio/radarr
   tag: latest
 ingress:
-  annotations:
-    kubernetes.io/ingress.class: nginx
   enabled: true
+  ingressClassName: traefik
   hosts:
   - host: radarr.local
     paths:

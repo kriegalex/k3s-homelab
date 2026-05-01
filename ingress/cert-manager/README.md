@@ -9,11 +9,11 @@ cert-manager is a Kubernetes add-on that automates the management and issuance o
 - Integration with Let's Encrypt (DNS-01 and HTTP-01 challenges)
 - Support for multiple DNS providers (Infomaniak, Route53, Cloudflare, DuckDNS, etc.)
 - Certificate lifecycle management
-- Integration with ingress-nginx for automatic TLS
+- Integration with any Ingress controller (Traefik in this homelab) for automatic TLS
 
 ## Prerequisites
 
-- Kubernetes cluster with ingress-nginx installed
+- Kubernetes cluster with an Ingress controller installed (Traefik in this homelab)
 - kubectl configured to access your cluster
 - Helm 3.x installed
 - DNS provider account and API credentials
@@ -292,7 +292,7 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"  # References ClusterIssuer
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
   - hosts:
     - app.yourdomain.com
@@ -316,7 +316,7 @@ spec:
 3. Initiates DNS-01 challenge with your DNS provider
 4. Obtains certificate from Let's Encrypt
 5. Stores certificate in `example-app-tls` Secret
-6. ingress-nginx uses the certificate for TLS termination
+6. Traefik uses the certificate for TLS termination
 
 ### Manual Certificate Resource
 

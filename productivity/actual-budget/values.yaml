@@ -14,10 +14,11 @@ persistence:
 ingress:
   enabled: true
   url: budget.homelab.example.com
-  ingressClassName: nginx
+  ingressClassName: traefik
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/proxy-body-size: "20m"
+    # Traefik streams request bodies by default with no size cap — no
+    # equivalent to nginx proxy-body-size needed.
   hosts:
   - host: budget.homelab.example.com
     paths:

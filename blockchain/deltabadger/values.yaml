@@ -127,10 +127,11 @@ ingress:
     # -- Enable ingress
     enabled: false
     # -- Ingress class name
-    className: nginx
+    className: traefik
     # -- Ingress annotations
     annotations: {}
       # cert-manager.io/cluster-issuer: letsencrypt-prod
+      # traefik.ingress.kubernetes.io/router.middlewares: "traefik-redirect-https@kubernetescrd"
     # -- Ingress hosts
     hosts:
       - host: deltabadger.local

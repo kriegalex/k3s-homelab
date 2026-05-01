@@ -1,0 +1,43 @@
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: { name: nextcloud-wellknown-dav, namespace: nextcloud }
+spec:
+  redirectRegex:
+    regex: "https://([^/]+)/\\.well-known/(card|cal)dav"
+    replacement: "https://${1}/remote.php/dav/"
+    permanent: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: { name: nextcloud-wellknown-rewrite, namespace: nextcloud }
+spec:
+  replacePathRegex:
+    regex: "^/\\.well-known/(webfinger|nodeinfo|host-meta|host-meta\\.json)"
+    replacement: "/index.php/.well-known/${1}"
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: { name: nextcloud-security-headers, namespace: nextcloud }
+spec:
+  headers:
+    customResponseHeaders:
+      X-Powered-By: ""
+      Server: ""
+---
+# Note: no Buffering middleware. Traefik streams request bodies by default with no
+# size cap, which is what we want for Nextcloud chunked uploads and large WebDAV PUTs.
+# A Buffering middleware would force full request buffering (memory + disk spool)
+# before forwarding — see Traefik issue #12407. Upload size is enforced by Nextcloud
+# / PHP (upload_max_filesize, post_max_size) instead.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: { name: nextcloud-cors, namespace: nextcloud }
+spec:
+  headers:
+    accessControlAllowMethods:
+      ["GET","POST","PUT","DELETE","OPTIONS","PROPFIND","PROPPATCH","MKCOL","COPY","MOVE","LOCK","UNLOCK"]
+    accessControlAllowOriginList: ["https://cloud.lourenco.ch"]
+    accessControlAllowHeaders: ["X-Forwarded-For"]
+    accessControlMaxAge: 100
+    addVaryHeader: true

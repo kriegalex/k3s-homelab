@@ -101,12 +101,11 @@ server:
   ingress:
     main:
       enabled: True
-      className: nginx # mandatory for ingress-nginx
+      className: traefik
       annotations:
-        # proxy-body-size is set to 0 to remove the body limit on file uploads
-        nginx.ingress.kubernetes.io/proxy-body-size: "0"
         cert-manager.io/cluster-issuer: letsencrypt-prod
-        nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+        # Traefik streams request bodies by default with no cap — file uploads
+        # are unconstrained without an explicit Buffering middleware.
       hosts:
         - host: immich.homelab.example.com
           paths:

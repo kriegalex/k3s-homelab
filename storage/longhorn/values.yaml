@@ -14,5 +14,5 @@ defaultBackupStore:
 ingress:
   enabled: true
   host: longhorn.local
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls: false

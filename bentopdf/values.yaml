@@ -5,7 +5,7 @@ image:
 
 ingress:
   enabled: true
-  className: nginx
+  className: traefik
   url: "bentopdf.local"
 
 resources:

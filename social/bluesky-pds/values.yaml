@@ -89,7 +89,7 @@ service:
 # CRITICAL: Ingress with wildcard subdomain support is REQUIRED for PDS to work
 ingress:
   enabled: true
-  className: "nginx"
+  className: "traefik"
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 

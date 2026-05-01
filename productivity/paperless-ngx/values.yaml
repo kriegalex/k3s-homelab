@@ -35,10 +35,12 @@ ingress:
   # @default -- See [values.yaml](./values.yaml)
   main:
     enabled: true
-    ingressClassName: nginx
+    ingressClassName: traefik
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod
-      nginx.ingress.kubernetes.io/proxy-body-size: 64m
+      # Body-size cap (64 MiB) for document uploads — implemented as a
+      # Traefik Buffering Middleware in ingress/traefik/middlewares/paperless-body-64m.yaml.
+      traefik.ingress.kubernetes.io/router.middlewares: "paperless-body-limit-64m@kubernetescrd"
     hosts:
     - host: paperless.homelab.example.com
       paths:

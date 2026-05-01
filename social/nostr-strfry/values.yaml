@@ -57,7 +57,7 @@ ingress:
   # -- Enable ingress resource
   enabled: true
   # -- Ingress class name
-  className: "nginx"
+  className: "traefik"
   # -- Additional ingress annotations
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod

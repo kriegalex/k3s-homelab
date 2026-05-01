@@ -6,13 +6,13 @@ imagePullSecrets:
 
 ingress:
   enabled: true
-  className: nginx
+  className: traefik
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/proxy-body-size: "0"
-    nginx.ingress.kubernetes.io/proxy-buffering: "off"
-    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # HTTP→HTTPS redirect via Traefik Middleware (ingress/traefik/middlewares/redirect-https.yaml).
+    # Body size and request streaming are unconstrained by default in Traefik —
+    # no equivalents to nginx proxy-body-size / proxy-buffering / proxy-request-buffering needed.
+    traefik.ingress.kubernetes.io/router.middlewares: "traefik-redirect-https@kubernetescrd"
   hosts:
     - host: n8n.homelab.example.com
       paths:

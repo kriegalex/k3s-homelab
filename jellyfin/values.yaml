@@ -7,14 +7,14 @@ ingress:
   enabled: true
 
   # The ingress class that should be used
-  ingressClassName: "nginx"
+  ingressClassName: "traefik"
 
   # The url to use for the ingress reverse proxy to point at this pms instance
   url: "https://jellyfin.domain.com"
 
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/backend-protocol: "HTTP" # Change to HTTPS if required
+    # Traefik picks up the Service port natively; no backend-protocol annotation needed.
 
 tolerations: []
 ## If you dedicate a node to a media server via tainting

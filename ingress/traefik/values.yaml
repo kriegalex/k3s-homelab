@@ -1,0 +1,48 @@
+# Traefik v3 — k3s homelab, parallel-run config
+deployment:
+  replicas: 1
+
+ingressClass:
+  enabled: true
+  isDefaultClass: false             # do NOT steal Ingresses without explicit class
+  name: traefik
+
+providers:
+  kubernetesIngress:
+    enabled: true
+    allowExternalNameServices: true
+    publishedService:
+      enabled: true                 # writes LB IP back to Ingress status
+  kubernetesCRD:
+    enabled: true
+    allowCrossNamespace: false
+    allowExternalNameServices: true
+
+ports:
+  web:
+    port: 8000
+    exposedPort: 80
+    # Do NOT add a global http→https redirect here. Tier-1 services are HTTP-only.
+  websecure:
+    port: 8443
+    exposedPort: 443
+    http:
+      tls:
+        enabled: true
+
+service:
+  enabled: true
+  type: LoadBalancer
+  # No metallb annotation yet — auto-assign during parallel run.
+
+# Traefik's API endpoint (api@internal) is enabled by default in the chart.
+# Disable the chart's built-in dashboard IngressRoute — we create our own.
+ingressRoute:
+  dashboard:
+    enabled: false
+
+logs:
+  general:
+    level: INFO
+  access:
+    enabled: true

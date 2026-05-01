@@ -7,11 +7,10 @@ image:
 
 ingress:
   enabled: true
-  ingressClassName: nginx
+  ingressClassName: traefik
   url: "https://plex.homelab.example.com"
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
   tls:
     - hosts:
         - plex.homelab.example.com

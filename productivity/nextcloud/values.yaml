@@ -14,36 +14,19 @@ replicaCount: 1
 ##
 ingress:
   enabled: true
-  className: nginx
+  className: traefik
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: 4G
     cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/cors-allow-headers: X-Forwarded-For
-    nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/server-snippet: |-
-      server_tokens off;
-      proxy_hide_header X-Powered-By;
-      rewrite ^/.well-known/webfinger /index.php/.well-known/webfinger last;
-      rewrite ^/.well-known/nodeinfo /index.php/.well-known/nodeinfo last;
-      rewrite ^/.well-known/host-meta /public.php?service=host-meta last;
-      rewrite ^/.well-known/host-meta.json /public.php?service=host-meta-json;
-      location = /.well-known/carddav {
-        return 301 $scheme://$host/remote.php/dav;
-      }
-      location = /.well-known/caldav {
-        return 301 $scheme://$host/remote.php/dav;
-      }
-      location = /robots.txt {
-        allow all;
-        log_not_found off;
-        access_log off;
-      }
-      location ~ ^/(?:build|tests|config|lib|3rdparty|templates|data)/ {
-        deny all;
-      }
-      location ~ ^/(?:autotest|occ|issue|indie|db_|console) {
-        deny all;
-      }
+    # See ingress/traefik/middlewares/nextcloud.yaml for definitions:
+    #   - wellknown-dav      301 /.well-known/{card,cal}dav -> /remote.php/dav/
+    #   - wellknown-rewrite  rewrite /.well-known/{webfinger,nodeinfo,host-meta,host-meta.json}
+    #                          -> /index.php/.well-known/...
+    #   - security-headers   strip Server / X-Powered-By
+    #   - cors               CORS for cloud.lourenco.ch (WebDAV verbs included)
+    # Body size: Traefik streams request bodies by default with no cap, which is
+    # what Nextcloud chunked uploads need; PHP enforces upload_max_filesize /
+    # post_max_size internally. Do NOT add a Buffering middleware (Traefik #12407).
+    traefik.ingress.kubernetes.io/router.middlewares: "nextcloud-nextcloud-wellknown-dav@kubernetescrd,nextcloud-nextcloud-wellknown-rewrite@kubernetescrd,nextcloud-nextcloud-security-headers@kubernetescrd,nextcloud-nextcloud-cors@kubernetescrd"
   tls:
   - hosts:
     - cloud.homelab.example.com
@@ -175,13 +158,17 @@ collabora:
       passwordKey: "password"
   ingress:
     enabled: true
-    className: nginx
+    className: traefik
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod
-      nginx.ingress.kubernetes.io/proxy-body-size: "0"
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
-      nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
-      nginx.ingress.kubernetes.io/upstream-hash-by: $arg_WOPISrc
+      # Traefik defaults stream request bodies (no proxy-body-size needed) and
+      # use long-lived upstream connections. If WOPI long polls hit a timeout,
+      # attach the long-timeout-600 ServersTransport (see
+      # ingress/traefik/middlewares/collabora-timeout.yaml) to the collabora
+      # Service via:
+      #   traefik.ingress.kubernetes.io/service.serverstransport: nextcloud-long-timeout-600@kubernetescrd
+      # nginx upstream-hash-by ($arg_WOPISrc) sticky sessions are not currently
+      # replicated — Collabora has been running fine without them.
     hosts:
     - host: collabora.homelab.example.com
       paths:
@@ -263,17 +250,6 @@ affinity:
               operator: In
               values:
                 - k3s-worker4
-  podAffinity:
-    preferredDuringSchedulingIgnoredDuringExecution:
-    - podAffinityTerm:
-        labelSelector:
-          matchExpressions:
-          - key: app.kubernetes.io/instance
-            operator: In
-            values:
-            - nextcloud
-        topologyKey: kubernetes.io/hostname
-      weight: 80
   podAntiAffinity:
     preferredDuringSchedulingIgnoredDuringExecution:
     - podAffinityTerm:

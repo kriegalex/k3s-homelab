@@ -5,9 +5,10 @@ metadata:
   namespace: longhorn-system
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Force HTTPS via Traefik Middleware (ingress/traefik/middlewares/redirect-https.yaml).
+    traefik.ingress.kubernetes.io/router.middlewares: "traefik-redirect-https@kubernetescrd"
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
   - hosts:
     - longhorn.yourdomain.com  # CHANGE_ME

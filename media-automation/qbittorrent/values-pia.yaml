@@ -56,7 +56,7 @@ vpn:
     enabled: false
 
 ingress:
-  className: nginx
+  className: traefik
   enabled: true
   hosts:
   - host: torrent.local

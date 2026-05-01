@@ -26,9 +26,8 @@ image:
   repository: ghcr.io/hotio/sonarr
   tag: latest
 ingress:
-  annotations:
-    kubernetes.io/ingress.class: nginx
   enabled: true
+  ingressClassName: traefik
   hosts:
   - host: sonarr.local
     paths:

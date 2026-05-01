@@ -32,7 +32,7 @@ env:
 ingress:
   main:
     enabled: true
-    ingressClassName: nginx
+    ingressClassName: traefik
     hosts:
     - host: lidarr.local
       paths:
