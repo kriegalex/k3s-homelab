@@ -43,3 +43,6 @@ spec:
       owner: nextcloud
       secret:
         name: nextcloud-db-credentials
+  
+  monitoring:
+    enablePodMonitor: true

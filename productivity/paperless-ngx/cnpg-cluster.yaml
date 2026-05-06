@@ -43,3 +43,6 @@ spec:
       owner: paperless
       secret:
         name: paperless-db-credentials
+
+  monitoring:
+    enablePodMonitor: true

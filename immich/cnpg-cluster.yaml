@@ -28,7 +28,7 @@ spec:
 
   # Storage configuration
   storage:
-    size: 20Gi
+    size: 30Gi
     storageClass: longhorn-single-replica
 
   resources:
@@ -55,3 +55,6 @@ spec:
       data:
         compression: bzip2
     retentionPolicy: "30d"
+
+  monitoring:
+    enablePodMonitor: true

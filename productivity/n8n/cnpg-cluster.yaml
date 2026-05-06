@@ -52,3 +52,6 @@ spec:
       owner: n8n
       secret:
         name: n8n-db-credentials
+
+  monitoring:
+    enablePodMonitor: true
