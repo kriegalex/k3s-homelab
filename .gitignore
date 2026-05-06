@@ -6,6 +6,7 @@
 *.tmp
 *.bak
 CLAUDE.md
+claude-docs/
 
 # Auto-generated Helm values (extracted from live deployments)
 **/helm-values.yaml
