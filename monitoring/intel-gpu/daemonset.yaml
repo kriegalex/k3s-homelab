@@ -1,0 +1,81 @@
+---
+# Intel iGPU exporter for Plex/Jellyfin transcoding visibility.
+#
+# Wraps `intel_gpu_top -J` and exposes Prometheus metrics on port 9100.
+# Runs only on nodes labeled `intel.feature.node.kubernetes.io/gpu=true`,
+# which the intel-device-plugin/NFD already applies to workers 1, 3, 4.
+#
+# Image: ghcr.io/clambin/intel-gpu-exporter
+#   Repo: https://github.com/clambin/intel-gpu-exporter
+#   Metrics prefix: gpumon_*
+#   Companion dashboard: monitoring/intel-gpu/dashboard.yaml (ConfigMap)
+#
+# Privileged is required because intel_gpu_top opens an i915 perf stream,
+# which needs CAP_PERFMON. hostPID is required so it can read peer process
+# stats (the `gpumon_clients_count` metric).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: intel-gpu-monitoring
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: intel-gpu-exporter
+  namespace: intel-gpu-monitoring
+  labels:
+    app.kubernetes.io/name: intel-gpu-exporter
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: intel-gpu-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: intel-gpu-exporter
+    spec:
+      hostPID: true
+      nodeSelector:
+        intel.feature.node.kubernetes.io/gpu: "true"
+      containers:
+      - name: exporter
+        image: ghcr.io/clambin/intel-gpu-exporter:0.7.0
+        args:
+          - --interval=5s
+          - --device=drm:/dev/dri/card0
+        ports:
+        - name: metrics
+          containerPort: 9100
+          protocol: TCP
+        securityContext:
+          privileged: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+        volumeMounts:
+        - name: dev-dri
+          mountPath: /dev/dri
+      volumes:
+      - name: dev-dri
+        hostPath:
+          path: /dev/dri
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: intel-gpu-exporter
+  namespace: intel-gpu-monitoring
+  labels:
+    app.kubernetes.io/name: intel-gpu-exporter
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: intel-gpu-exporter
+  ports:
+  - name: metrics
+    port: 9100
+    targetPort: metrics

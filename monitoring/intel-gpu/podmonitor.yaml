@@ -1,0 +1,23 @@
+---
+# PodMonitor lives in the monitoring namespace so the Prometheus operator's
+# default namespaceSelector picks it up; it targets pods in intel-gpu-monitoring.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: intel-gpu-exporter
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames: [intel-gpu-monitoring]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: intel-gpu-exporter
+  podMetricsEndpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_pod_node_name]
+      targetLabel: node

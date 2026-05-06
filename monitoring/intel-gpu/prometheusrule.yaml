@@ -1,0 +1,46 @@
+---
+# Alerts for Intel iGPU activity.
+#
+# The `Video` engine class is what hardware transcoding (Plex/Jellyfin
+# VAAPI/QSV) uses, so sustained activity there is a reliable transcoding
+# signal. `VideoEnhance` is hit by tone-mapping (HDR -> SDR) and
+# deinterlacing.
+#
+# clambin's exporter aggregates intel_gpu_top -J engines by class, so the
+# engine label values are "Video", "VideoEnhance", "Render/3D", "Blitter"
+# (no /N suffix — multiple VCS engines on a chip are summed into one).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: intel-gpu
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+  - name: intel-gpu.rules
+    rules:
+    - alert: IntelGPUTranscodingActive
+      expr: avg_over_time(gpumon_engine_usage{attrib="busy",engine="Video"}[2m]) > 30
+      for: 1m
+      labels:
+        severity: info
+      annotations:
+        summary: "Intel iGPU video engine busy on {{ $labels.node }}"
+        description: "Video engine sustained >30% for 2m ({{ $value | printf \"%.0f\" }}%). Likely Plex/Jellyfin hardware transcoding."
+    - alert: IntelGPUTranscodingSaturated
+      expr: avg_over_time(gpumon_engine_usage{attrib="busy",engine="Video"}[5m]) > 85
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Intel iGPU video engine saturated on {{ $labels.node }}"
+        description: "Video engine averaging {{ $value | printf \"%.0f\" }}% for 5m. Transcoders may start queuing or falling back to CPU."
+    - alert: IntelGPUExporterDown
+      expr: up{job="monitoring/intel-gpu-exporter"} == 0
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Intel GPU exporter down on {{ $labels.node }}"
+        description: "No GPU metrics scraped for 10m — transcoding visibility lost."
