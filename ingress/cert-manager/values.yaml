@@ -8,3 +8,10 @@ podDnsConfig:
   nameservers:
     - 1.1.1.1
     - 8.8.8.8
+
+prometheus:
+  enabled: true
+  servicemonitor:
+    enabled: true
+    labels:
+      release: prometheus
