@@ -46,3 +46,13 @@ logs:
     level: INFO
   access:
     enabled: true
+
+metrics:
+  prometheus:
+    addRoutersLabels: true
+    service:
+      enabled: true
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: prometheus
