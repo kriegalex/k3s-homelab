@@ -25,11 +25,10 @@ pms:
       enabled: false
   resources:
     requests:
-      cpu: "2000m"
-      memory: "4Gi"
+      cpu: "1000m"
+      memory: "8Gi"
       gpu.intel.com/i915: "1"
     limits:
-      cpu: "4000m"
       memory: "16Gi"
       gpu.intel.com/i915: "1"
 

@@ -55,7 +55,7 @@ resources:
     memory: 8Gi
   requests:
     cpu: 100m
-    memory: 512Mi
+    memory: 1Gi
 service:
   port: 80
   type: ClusterIP

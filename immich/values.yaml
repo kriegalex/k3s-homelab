@@ -91,8 +91,8 @@ server:
         main:
           resources:
             requests:
-              cpu: 200m
-              memory: 512Mi
+              cpu: 100m
+              memory: 1Gi
               gpu.intel.com/i915: "1"
             limits:
               cpu: 2000m
@@ -124,7 +124,7 @@ machine-learning:
           resources:
             requests:
               cpu: 100m
-              memory: 512Mi
+              memory: 768Mi
             limits:
               cpu: 4000m
               memory: 4Gi

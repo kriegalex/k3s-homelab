@@ -76,11 +76,11 @@ ingress:
 # -- Resource limits and requests for the relay
 resources:
   limits:
-    cpu: 500m
-    memory: 1Gi
+    cpu: 1000m
+    memory: 6Gi
   requests:
-    cpu: 100m
-    memory: 256Mi
+    cpu: 250m
+    memory: 1500Mi
 
 # Persistence configuration for the nostr relay database
 persistence:

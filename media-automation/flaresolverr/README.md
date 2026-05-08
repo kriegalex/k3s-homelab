@@ -3,14 +3,14 @@
 ## Add repository
 
 ```
-helm repo add k8s-home-lab-repo https://k8s-home-lab.github.io/helm-charts/
+helm repo add k8s-home-lab https://k8s-home-lab.github.io/helm-charts/
 helm repo update
 ```
 
 ## Install chart
 
 ```
-helm upgrade --namespace media --create-namespace --install flaresolverr k8s-home-lab-repo/flaresolverr -f custom-values.yaml
+helm upgrade --namespace media --create-namespace --install flaresolverr k8s-home-lab/flaresolverr -f custom-values.yaml
 ```
 
 ## Default values

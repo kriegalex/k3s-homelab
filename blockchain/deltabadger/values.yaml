@@ -84,11 +84,11 @@ controllers:
         # -- Resource limits and requests
         resources:
           limits:
-            cpu: 1000m
-            memory: 1Gi
+            cpu: 500m
+            memory: 2Gi
           requests:
-            cpu: 250m
-            memory: 512Mi
+            cpu: 150m
+            memory: 1Gi
 
         # -- Container security context
         securityContext:
