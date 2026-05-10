@@ -192,3 +192,12 @@ alertmanager:
                   operator: In
                   values:
                     - k3s-worker4
+
+# k3s embeds kube-proxy, controller-manager, and scheduler in a single binary
+# without separate /metrics endpoints, so these scrape targets are always down.
+kubeProxy:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
