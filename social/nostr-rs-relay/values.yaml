@@ -153,8 +153,12 @@ config:
     address: "0.0.0.0"
     # -- Network port
     port: 8080
-    # -- Header for finding the client's IP when behind a reverse proxy
-    # remote_ip_header: ""
+    # -- Header for finding the client's IP when behind a reverse proxy.
+    # Enabled 2026-05-18: Traefik Service moved to
+    # externalTrafficPolicy=Local (MetalLB L2), so the real client IP is
+    # no longer SNAT'd and Traefik carries it in X-Forwarded-For.
+    # See claude-docs/traefik-client-ip.md.
+    remote_ip_header: "x-forwarded-for"
     # -- Websocket ping interval in seconds
     # ping_interval: 300
 
@@ -168,8 +172,14 @@ config:
     # -- Limit events created per second, averaged over one minute
     messages_per_sec: 100
     # -- Limit client subscriptions created per minute
+    # NOTE: left unset on purpose. BitChat clients legitimately open many
+    # geohash/geo-dm subscriptions; a per-minute cap would break them.
     # subscriptions_per_min: 0
-    # -- Limit how many concurrent database connections a client can have
+    # -- Limit how many concurrent database connections a client can have.
+    # NOT set: verified against nostr-rs-relay master (server.rs/db.rs/
+    # repo/sqlite.rs) that this key has no enforcement site on the SQLite
+    # read path — the only concurrency cap is the global semaphore sized
+    # database.max_conn. Setting it here would be a misleading no-op.
     # db_conns_per_client: 0
     # -- Limit blocking threads used for database connections
     # max_blocking_threads: 16
@@ -187,8 +197,11 @@ config:
     # event_kind_blacklist: []
     # -- Event kind allowlist
     # event_kind_allowlist: []
-    # -- Rejects imprecise requests (kind only and author only etc)
-    limit_scrapers: false
+    # -- Rejects imprecise requests (kind only and author only etc).
+    # Enabled to stop scrapers issuing broad filters that force full scans
+    # of the ~14 GB SQLite DB (observed 70-196 MB/s read bursts, amplified
+    # x3 by Longhorn replicas). Precise client queries are unaffected.
+    limit_scrapers: true
 
   # Authorization settings
   # authorization:
