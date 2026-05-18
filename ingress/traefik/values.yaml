@@ -1,6 +1,16 @@
 # Traefik v3 — k3s homelab, parallel-run config
 deployment:
-  replicas: 1
+  replicas: 2
+
+# Spread the 2 replicas onto different nodes so the MetalLB L2 LB IP is
+# not pinned to a single node once externalTrafficPolicy is Local.
+topologySpreadConstraints:
+  - labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: traefik
+    maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
 
 ingressClass:
   enabled: true
@@ -34,6 +44,11 @@ service:
   enabled: true
   type: LoadBalancer
   # No metallb annotation yet — auto-assign during parallel run.
+  spec:
+    # Preserve real client IP: with MetalLB L2, ETP=Local makes the
+    # elected node deliver to a local Traefik pod with no SNAT. Requires
+    # ≥2 replicas spread across nodes (see topologySpreadConstraints).
+    externalTrafficPolicy: Local
 
 # Traefik's API endpoint (api@internal) is enabled by default in the chart.
 # Disable the chart's built-in dashboard IngressRoute — we create our own.
