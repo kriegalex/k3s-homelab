@@ -1,0 +1,91 @@
+# ntfy server — chart: oci://codeberg.org/wrenix/helm-charts/ntfy v0.5.15
+# Committed source of truth. The gitignored helm-values.yaml in this folder
+# is a live-values snapshot (see scripts/extract-helm-values.sh).
+#
+# Only fields that DIFFER from the chart's upstream defaults are listed here,
+# so this file doubles as a diff against upstream. To inspect the full
+# effective config, run:
+#   helm show values oci://codeberg.org/wrenix/helm-charts/ntfy --version 0.5.15
+#
+# Install:
+#   kubectl create namespace ntfy
+#   kubectl apply -f ntfy-secrets.yaml   # see README and secrets-template.yaml
+#   helm upgrade --install ntfy oci://codeberg.org/wrenix/helm-charts/ntfy \
+#     --version 0.5.15 -n ntfy -f values.yaml -f helm-values.yaml
+
+ntfy:
+  # Must match the public URL Traefik routes to ntfy — otherwise web-push
+  # registrations and topic-share links point at example.org.
+  baseURL: "https://ntfy.homelab.example.com"
+
+  # Private homelab inbox: deny anonymous access, require login.
+  auth:
+    file: /data/user.db   # chart mounts PVC at /data
+    defaultAccess: deny-all
+  enableLogin: true
+
+  # Persist cache + attachments to the Longhorn PVC (chart default is null/in-memory).
+  cache:
+    file: /data/cache.db
+  attachment:
+    cacheDir: /data/attachments
+    sizeLimit:
+      total: "1G"          # default 5G — homelab attachments are tiny
+    expireDuration: "24h"  # default 3h
+
+  # Auto-generate VAPID keys on first install so the mobile/web app
+  # can receive push. Stored in a Secret by the chart.
+  webPush:
+    keys:
+      create: true
+    emailAddress: "admin@homelab.example.com"
+
+persistence:
+  enabled: true
+  storageClass: longhorn
+  size: 2Gi
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    traefik.ingress.kubernetes.io/router.middlewares: "traefik-redirect-https@kubernetescrd"
+  hosts:
+    - host: ntfy.homelab.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - ntfy.homelab.example.com
+      secretName: ntfy-tls
+
+prometheus:
+  servicemonitor:
+    enabled: true
+    labels:
+      # Required by kube-prometheus-stack's serviceMonitorSelector
+      # (see memory: kube-prom-release-label).
+      release: prometheus
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+# Soft-pin to k3s-worker4 to colocate with the rest of the monitoring stack
+# (matches alertmanager affinity in monitoring/values.yaml).
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3s-worker4
