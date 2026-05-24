@@ -60,6 +60,9 @@ declare -A MANUAL_MAPPINGS=(
     ["nfs-subdir-external-provisioner"]="storage/nfs-shares/provisioner"
     ["longhorn"]="storage/longhorn"
     ["prometheus"]="monitoring"
+    ["cnpg"]="database/cloudnative-pg"
+    ["ntfy"]="monitoring/ntfy"
+    ["alertmanager-ntfy"]="monitoring/alertmanager-ntfy"
     ["deltabadger"]="blockchain/deltabadger"
     # Media automation
     ["radarr"]="media-automation/radarr"
@@ -74,6 +77,8 @@ declare -A MANUAL_MAPPINGS=(
     # Game servers
     ["palworld-server"]="game-servers/palworld-server"
     ["satisfactory-server"]="game-servers/satisfactory-server"
+    ["enshrouded-server"]="game-servers/enshrouded-server"
+    ["valheim-server"]="game-servers/valheim-server"
     # Productivity
     ["nextcloud"]="productivity/nextcloud"
     ["paperless-ngx"]="productivity/paperless-ngx"
