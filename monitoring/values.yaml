@@ -162,6 +162,8 @@ grafana:
         gnetId: 13646
         revision: 2
         datasource: Prometheus
+      backup-overview:
+        json: ""   # populated at install time by --set-file
 
 prometheus:
   enabled: true
@@ -198,6 +200,11 @@ alertmanager:
       resolve_timeout: 5m
     route:
       receiver: ntfy
+      # In multi alertMode (set in monitoring/alertmanager-ntfy/values.yaml),
+      # the ntfy bridge sends one push per Alertmanager group. Grouping by
+      # alertname + namespace batches alert storms (e.g. multiple Longhorn
+      # volumes failing) into a single notification listing each alert,
+      # instead of one push per affected volume.
       group_by: [alertname, namespace]
       group_wait: 30s
       group_interval: 5m
