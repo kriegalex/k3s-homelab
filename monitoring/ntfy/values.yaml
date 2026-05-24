@@ -18,6 +18,14 @@ ntfy:
   # registrations and topic-share links point at example.org.
   baseURL: "https://ntfy.homelab.example.com"
 
+  # Disable the iOS-push forwarder. Chart default is https://ntfy.sh, which
+  # turns on strict client-side sequence-ID validation and breaks the
+  # alertmanager-ntfy `resolved.update-notification` feature (the bridge
+  # sends Alertmanager hex fingerprints as X-Sequence-ID, which ntfy
+  # then 400s with "sequence ID invalid"). Subscribers here are all on
+  # Android/desktop, no iOS push needed. See: ntfy-update-notification-incompat.
+  upstreamBaseURL: ""
+
   # Private homelab inbox: deny anonymous access, require login.
   auth:
     file: /data/user.db   # chart mounts PVC at /data

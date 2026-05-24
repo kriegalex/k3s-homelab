@@ -5,23 +5,24 @@ messages to a [ntfy](https://ntfy.sh) topic. Bridges this cluster's
 Alertmanager (configured in `monitoring/values.yaml`) to the in-cluster
 ntfy server in [`../ntfy/`](../ntfy/).
 
-Chart: [`oci://codeberg.org/wrenix/helm-charts/alertmanager-ntfy`](https://artifacthub.io/packages/helm/wrenix-helm-charts/alertmanager-ntfy) (v0.1.9, app [xenrox/ntfy-alertmanager](https://codeberg.org/xenrox/ntfy-alertmanager) v1.0.0).
-
-> **Known issue — liveness/readiness probes (chart v0.1.9 bug):** The chart
-> hardcodes `httpGet GET /` probes, but ntfy-alertmanager returns 405 for
-> non-POST requests. Kubernetes kills the pod on every probe cycle. See
-> [Post-install probe patch](#post-install-probe-patch) below — this must
-> be re-applied after every `helm upgrade`.
+Chart: [`k8s-charts/alertmanager-ntfy`](https://github.com/kriegalex/k8s-charts/tree/main/charts/alertmanager-ntfy)
+v0.2.0 — an AGPL-3.0 fork of the upstream
+[`xenrox/ntfy-alertmanager`](https://codeberg.org/xenrox/ntfy-alertmanager)
+`contrib/charts/alertmanager-ntfy` chart, extended to expose the full
+set of scfg config knobs (`alert-mode`, `ntfy.template-path`,
+`ntfy.generator-url-label`, `resolved.update-notification`, `cache{}`,
+`alertmanager{}` silence block). App: [xenrox/ntfy-alertmanager](https://codeberg.org/xenrox/ntfy-alertmanager) v1.0.0.
 
 ## TL;DR
 
 ```bash
+helm repo add k8s-charts https://kriegalex.github.io/k8s-charts/   # one-time
+helm repo update
 kubectl create namespace ntfy   # shared with the ntfy server; skip if already created
 cp secrets-template.yaml helm-values-secret.yaml
 # Edit helm-values-secret.yaml — fill in the publisher password
-helm upgrade --install alertmanager-ntfy \
-  oci://codeberg.org/wrenix/helm-charts/alertmanager-ntfy \
-  --version 0.1.9 -n ntfy \
+helm upgrade --install alertmanager-ntfy k8s-charts/alertmanager-ntfy \
+  --version 0.2.0 -n ntfy \
   -f values.yaml -f helm-values-secret.yaml
 ```
 
@@ -48,8 +49,8 @@ Then point Alertmanager at it — see "Wiring Alertmanager" below.
 
 ## Why this is configured the way it is
 
-- **Credentials in a separate file.** The wrenix chart renders the
-  bridge's config — including ntfy `user`/`password` — directly into a
+- **Credentials in a separate file.** The chart renders the bridge's
+  config — including ntfy `user`/`password` — directly into a
   Helm-managed `Secret` from `.Values.ntfyAlertmanager.ntfy.{user,password}`.
   There is no `envFrom` or external-secret hook exposed, so the standard
   "point at a sealed Secret" pattern doesn't apply. We instead layer a
@@ -61,6 +62,14 @@ Then point Alertmanager at it — see "Wiring Alertmanager" below.
 - **Severity → priority mapping** mirrors the route tree in
   `monitoring/values.yaml`'s `alertmanager.config` (critical=5, warning=3,
   info=1). If you change one, change the other.
+- **`alertMode: multi` + custom template + cache.** The upstream binary's
+  default body formatter dumps every label and annotation — 90% noise
+  on a phone. We render only the `summary` and `description` annotations,
+  and multi mode batches Alertmanager groups into a single ntfy push
+  (essential for storms — many Longhorn volumes failing at once become
+  one notification listing all of them, not N pushes). The cache key
+  is the group fingerprint, so the same group of failures doesn't
+  re-publish on every Alertmanager re-evaluation.
 
 ## Wiring Alertmanager
 
@@ -72,7 +81,7 @@ alertmanager:
   config:
     route:
       receiver: ntfy
-      group_by: [alertname, namespace]
+      group_by: [alertname, namespace]   # multi alertMode batches storms into one push per group
       routes:
         - matchers: [alertname = "Watchdog"]
           receiver: "null"
@@ -104,9 +113,13 @@ kubectl -n ntfy get deploy,svc,pods -l app.kubernetes.io/name=alertmanager-ntfy
 kubectl -n monitoring port-forward svc/alertmanager-operated 9093
 curl -s -XPOST localhost:9093/api/v2/alerts -H 'Content-Type: application/json' -d '[{
   "labels":{"alertname":"BridgeSmokeTest","severity":"warning","namespace":"monitoring"},
-  "annotations":{"summary":"smoke test — alertmanager-ntfy bridge"}
+  "annotations":{"summary":"smoke test — alertmanager-ntfy bridge","description":"This is the description body that lands on your phone."}
 }]'
 # Expect: a notification on the homelab-k3s ntfy topic within ~30 s.
+# Title: [FIRING] BridgeSmokeTest monitoring
+# Body:  **smoke test — alertmanager-ntfy bridge**
+#        This is the description body that lands on your phone.
+# Plus a tappable "View in Prometheus" action button.
 ```
 
 If nothing arrives, check bridge logs (`kubectl -n ntfy logs deploy/alertmanager-ntfy`).
@@ -114,30 +127,14 @@ If nothing arrives, check bridge logs (`kubectl -n ntfy logs deploy/alertmanager
 ntfy service name/path is wrong; nothing logged means Alertmanager
 didn't route to the bridge — re-check `monitoring/values.yaml`.
 
-## Post-install probe patch
-
-Chart v0.1.9 does not expose probe configuration in `.Values`. After every
-`helm upgrade --install` run this patch to replace the broken `httpGet` probes
-with TCP socket probes:
-
-```bash
-kubectl --context=default -n ntfy patch deployment alertmanager-ntfy \
-  --type=json -p='[
-    {"op":"replace","path":"/spec/template/spec/containers/0/livenessProbe",
-     "value":{"tcpSocket":{"port":80},"initialDelaySeconds":5,"periodSeconds":10,"failureThreshold":3}},
-    {"op":"replace","path":"/spec/template/spec/containers/0/readinessProbe",
-     "value":{"tcpSocket":{"port":80},"initialDelaySeconds":5,"periodSeconds":5,"failureThreshold":3}}
-  ]'
-```
-
-Remove this section once an upstream chart version exposes probe overrides.
-
 ## Upgrading
 
 ```bash
-helm --kube-context=default -n ntfy upgrade alertmanager-ntfy \
-  oci://codeberg.org/wrenix/helm-charts/alertmanager-ntfy \
+helm repo update k8s-charts
+helm --kube-context=default -n ntfy upgrade alertmanager-ntfy k8s-charts/alertmanager-ntfy \
   --version <new-version> \
   -f values.yaml -f helm-values-secret.yaml
-# Then re-apply the probe patch above.
 ```
+
+No post-install patches required — `/health` probes and full scfg
+field coverage are baked into the chart.

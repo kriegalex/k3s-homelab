@@ -1,7 +1,10 @@
-# alertmanager-ntfy bridge — chart: oci://codeberg.org/wrenix/helm-charts/alertmanager-ntfy v0.1.9
+# alertmanager-ntfy bridge — chart: k8s-charts/alertmanager-ntfy v0.2.0
+# (AGPL-3.0 fork of xenrox/ntfy-alertmanager's contrib chart — see
+#  https://github.com/kriegalex/k8s-charts/tree/main/charts/alertmanager-ntfy)
+#
 # Receives Alertmanager webhooks, formats them, POSTs to a ntfy topic.
 # Only fields that differ from upstream defaults are listed here; run:
-#   helm show values oci://codeberg.org/wrenix/helm-charts/alertmanager-ntfy --version 0.1.9
+#   helm show values k8s-charts/alertmanager-ntfy --version 0.2.0
 # for the full effective config.
 #
 # IMPORTANT: ntfy credentials live in a separate gitignored values file
@@ -9,39 +12,58 @@
 # because the chart renders them directly into a Secret from .Values
 # (no envFrom path is exposed). Install with both files:
 #
+#   helm repo add k8s-charts https://kriegalex.github.io/k8s-charts/   # one-time
+#   helm repo update
 #   kubectl create namespace ntfy   # shared with the ntfy server
-#   helm upgrade --install alertmanager-ntfy \
-#     oci://codeberg.org/wrenix/helm-charts/alertmanager-ntfy \
-#     --version 0.1.9 -n ntfy \
+#   helm upgrade --install alertmanager-ntfy k8s-charts/alertmanager-ntfy \
+#     --version 0.2.0 -n ntfy \
 #     -f values.yaml -f helm-values-secret.yaml
 
-image:
-  registry: docker.io          # chart default (codeberg.org) has no versioned tags; Docker Hub has them
-  repository: xenrox/ntfy-alertmanager
-  tag: "1.0.0"                 # latest; chart appVersion is 0.4.0 but that tag doesn't exist on codeberg
-
-# KNOWN ISSUE — liveness/readiness probes (chart v0.1.9 bug):
-# The chart hardcodes httpGet GET / for both probes. ntfy-alertmanager correctly
-# returns 405 for non-POST requests, so Kubernetes kills the pod on every probe.
-# The chart does not expose probe overrides in .Values, so this cannot be fixed
-# via values alone. After every helm upgrade, re-apply the TCP socket patch:
-#
-#   kubectl --context=default -n ntfy patch deployment alertmanager-ntfy \
-#     --type=json -p='[
-#       {"op":"replace","path":"/spec/template/spec/containers/0/livenessProbe",
-#        "value":{"tcpSocket":{"port":80},"initialDelaySeconds":5,"periodSeconds":10,"failureThreshold":3}},
-#       {"op":"replace","path":"/spec/template/spec/containers/0/readinessProbe",
-#        "value":{"tcpSocket":{"port":80},"initialDelaySeconds":5,"periodSeconds":5,"failureThreshold":3}}
-#     ]'
-#
-# When a fixed chart is released, remove this comment and the post-upgrade step.
-
 ntfyAlertmanager:
+  # Multi mode: one ntfy push per Alertmanager group, regardless of how
+  # many alerts are in the group. Critical for storms like multiple
+  # Longhorn volumes failing at once — group_by [alertname, namespace]
+  # in monitoring/values.yaml batches them into a single notification
+  # instead of fanning out N pushes. (Single mode re-splits every group
+  # back into per-alert pushes, defeating Alertmanager grouping.)
+  alertMode: multi
+
   ntfy:
     # Publish to the in-cluster ntfy service — no need to round-trip
     # through the public Ingress for cluster-internal traffic.
     # ntfy.user and ntfy.password come from helm-values-secret.yaml.
     topic: http://ntfy.ntfy.svc.cluster.local/homelab-k3s
+    # Action button only fires for size-1 groups; the bridge has no
+    # per-alert URL to wire when the group contains several alerts.
+    generatorUrlLabel: "View in Prometheus"
+
+  # Custom notification body. Replaces the upstream default formatter
+  # (which dumps every label and annotation as "key = value" lines —
+  # 90% noise on a phone) with a compact form:
+  #  - singleton groups → summary + description (one alert, full detail)
+  #  - multi groups     → "<N> alerts" header + one bullet per alert
+  # Both rely on the `summary` / `description` annotations that
+  # PrometheusRule authors already write. Multi bullets also append the
+  # `persistentvolumeclaim` label when present: the default
+  # KubePersistentVolumeFillingUp summary is generic ("PersistentVolume
+  # is filling up."), so without this every PVC in a namespace-grouped
+  # batch renders an identical bullet and the PVC name is lost.
+  template:
+    enabled: true
+    body: |
+      {{- if eq (len .Alerts) 1 -}}
+      {{- with index .Alerts 0 }}
+      **{{ index .Annotations "summary" }}**
+
+      {{ index .Annotations "description" }}
+      {{- end }}
+      {{- else }}
+      **{{ len .Alerts }} alerts — {{ index .GroupLabels "alertname" }}**
+
+      {{ range .Alerts -}}
+      - {{ index .Annotations "summary" }}{{ with index .Labels "persistentvolumeclaim" }} — `{{ . }}`{{ end }}
+      {{ end }}
+      {{- end }}
 
   # Severity → priority + emoji tag mapping. Aligned with the route tree
   # documented in claude-docs/backup-strategy.md §8.2 (critical/warning/info).
@@ -64,7 +86,21 @@ ntfyAlertmanager:
         tags: ["information_source"]
 
   resolved:
+    # Update the original notification when an alert resolves instead of
+    # pushing a second one. Requires the ntfy server's iOS-push forwarder
+    # (NTFY_UPSTREAM_BASE_URL) to be DISABLED — otherwise ntfy rejects the
+    # bridge's hex-fingerprint X-Sequence-ID with 400 "sequence ID invalid"
+    # and drops every publish. See monitoring/ntfy/values.yaml where
+    # upstreamBaseURL is explicitly set to "" for this reason.
+    updateNotification: true
     tags: ["white_check_mark"]
+
+  # Required in single mode: deduplicate per-alert so re-evaluations during
+  # the same firing window don't re-publish. Duration should be ≥ Alertmanager
+  # repeat_interval (12h in monitoring/values.yaml; 1h for critical).
+  cache:
+    type: memory
+    duration: 24h
 
 resources:
   requests:
