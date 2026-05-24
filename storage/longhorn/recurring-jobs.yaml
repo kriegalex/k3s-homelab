@@ -1,0 +1,60 @@
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: weekly-backup-tier1
+  namespace: longhorn-system
+spec:
+  name: weekly-backup-tier1
+  cron: "30 2 * * 0"           # Sun 02:30 UTC
+  task: backup
+  groups: ["tier1"]
+  retain: 4
+  concurrency: 2
+  parameters:
+    full-backup-interval: "12" # incremental for 11 runs, full on 12th
+  labels:
+    backup-tier: tier1
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: weekly-backup-tier2
+  namespace: longhorn-system
+spec:
+  name: weekly-backup-tier2
+  cron: "30 3 * * 0"           # Sun 03:30 UTC (after tier1 finishes)
+  task: backup
+  groups: ["tier2"]
+  retain: 4
+  concurrency: 4
+  parameters:
+    full-backup-interval: "12"
+  labels:
+    backup-tier: tier2
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: hourly-snapshot-tier1
+  namespace: longhorn-system
+spec:
+  name: hourly-snapshot-tier1
+  cron: "15 * * * *"           # every hour at :15 — fast in-cluster recovery
+  task: snapshot
+  groups: ["tier1"]
+  retain: 24                   # keep 24h
+  concurrency: 2
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: daily-snapshot-tier2
+  namespace: longhorn-system
+spec:
+  name: daily-snapshot-tier2
+  cron: "30 0 * * *"           # daily at 00:30 UTC
+  task: snapshot
+  groups: ["tier2"]
+  retain: 7                    # keep 7 days
+  concurrency: 4
