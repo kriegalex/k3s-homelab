@@ -47,12 +47,7 @@ persistence:
     enabled: true
     existingClaim: lidarr-config
 
-  media:
+  data:
     enabled: true
-    mountPath: /media
-    existingClaim: nfs-music
-
-  torrent:
-    enabled: true
-    mountPath: /torrent
-    existingClaim: nfs-torrent
+    mountPath: /data
+    existingClaim: nfs-data

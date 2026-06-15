@@ -43,8 +43,6 @@ extraVolumeMounts:
     mountPath: /tv
   - name: anime
     mountPath: /anime
-  - name: music
-    mountPath: /music
 
 extraVolumes:
   - name: movies
@@ -56,9 +54,6 @@ extraVolumes:
   - name: anime
     persistentVolumeClaim:
       claimName: nfs-anime-plex
-  - name: music
-    persistentVolumeClaim:
-      claimName: nfs-music-plex
 
 extraEnv:
   TZ: "Europe/Paris"
