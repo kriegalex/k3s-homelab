@@ -1,0 +1,96 @@
+---
+# Scrape the node_exporter already running on the Unraid box (10.0.0.2:9100).
+# Unraid is not a k8s node, so it isn't covered by the cluster node-exporter
+# DaemonSet — we add it as an external static target.
+#
+# Primary purpose: watch memory growth caused by shfs `fuse_remember=-1`
+# (never-forget inodes). With remember=-1, shfs pins every inode looked up over
+# the array's uptime, freed only on array stop/start. No data/correctness risk —
+# purely a slow memory creep on long uptimes. See alerts below.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: unraid-node
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  scrapeInterval: 30s
+  metricsPath: /metrics
+  staticConfigs:
+    - targets:
+        - "10.0.0.2:9100"
+      labels:
+        instance: "unraid"   # alerts/dashboards key on instance="unraid"
+        host: "10.0.0.2"
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: unraid-shfs-memory
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: unraid.shfs.memory
+      interval: 1m
+      rules:
+        # Catch-all headroom signal. Baseline available mem is ~28-29 GiB / 31 GiB.
+        - alert: UnraidMemoryLow
+          expr: |
+            node_memory_MemAvailable_bytes{instance="unraid"}
+            / node_memory_MemTotal_bytes{instance="unraid"} < 0.10
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Unraid available memory < 10%"
+            description: "Available memory is {{ $value | humanizePercentage }}. Possible shfs remember=-1 inode growth; an array stop/start frees pinned inodes."
+
+        - alert: UnraidMemoryCritical
+          expr: |
+            node_memory_MemAvailable_bytes{instance="unraid"}
+            / node_memory_MemTotal_bytes{instance="unraid"} < 0.05
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Unraid available memory < 5%"
+            description: "Available memory is {{ $value | humanizePercentage }}. Risk of OOM/instability — consider an array restart to release pinned shfs inodes."
+
+        # Closest free proxy for pinned fuse inode/dentry memory.
+        # Baseline SUnreclaim is ~150 MB; sustained growth points at remember=-1.
+        - alert: UnraidSlabUnreclaimHigh
+          expr: node_memory_SUnreclaim_bytes{instance="unraid"} > 2e9
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Unraid unreclaimable slab > 2 GB"
+            description: "SUnreclaim is {{ $value | humanize1024 }}B (baseline ~150 MB). Pinned inode/dentry memory from shfs remember=-1 is growing."
+
+        # Early warning: trend available memory and page days before exhaustion.
+        - alert: UnraidMemoryExhaustionPredicted
+          expr: predict_linear(node_memory_MemAvailable_bytes{instance="unraid"}[6h], 7 * 24 * 3600) < 0
+          for: 2h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Unraid projected to exhaust memory within 7 days"
+            description: "Linear projection of MemAvailable over the last 6h crosses zero within 7 days. Plan an array stop/start to reset shfs inode cache."
+
+    - name: unraid.array.capacity
+      interval: 5m
+      rules:
+        # The /mnt/user (shfs) array is already ~82% full — warn before it fills.
+        - alert: UnraidArrayFillHigh
+          expr: |
+            node_filesystem_avail_bytes{instance="unraid",mountpoint="/mnt/user"}
+            / node_filesystem_size_bytes{instance="unraid",mountpoint="/mnt/user"} < 0.08
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Unraid /mnt/user array < 8% free"
+            description: "Free space on /mnt/user is {{ $value | humanizePercentage }}."
