@@ -14,6 +14,13 @@ spec:
         name: event-manager-postgres-secret
   imageName: ghcr.io/cloudnative-pg/postgresql:17.5
   instances: 3
+  # Disable botocore flexible checksums (botocore >=1.36); the QNAP swift3 S3
+  # gateway rejects x-amz-checksum-crc32 with InvalidDigest, breaking backups.
+  env:
+    - name: AWS_REQUEST_CHECKSUM_CALCULATION
+      value: when_required
+    - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+      value: when_required
   monitoring:
     enablePodMonitor: true
   postgresql:

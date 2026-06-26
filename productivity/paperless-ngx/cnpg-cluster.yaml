@@ -7,6 +7,15 @@ spec:
   instances: 3
   imageName: ghcr.io/cloudnative-pg/postgresql:17.2
 
+  # Disable botocore flexible checksums so backups keep working if this image is
+  # ever bumped to botocore >=1.36 (the QNAP swift3 S3 gateway rejects the new
+  # x-amz-checksum-crc32 with InvalidDigest). See database/cloudnative-pg/README.md.
+  env:
+    - name: AWS_REQUEST_CHECKSUM_CALCULATION
+      value: when_required
+    - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+      value: when_required
+
   storage:
     storageClass: longhorn-single-replica
     size: 10Gi

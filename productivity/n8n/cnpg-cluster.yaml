@@ -6,7 +6,16 @@ metadata:
 spec:
   instances: 3
   primaryUpdateStrategy: unsupervised
-  
+
+  # Disable botocore flexible checksums. botocore >=1.36 (image 17.5 ships 1.40.x)
+  # attaches x-amz-checksum-crc32 to every PUT/UploadPart, which the QNAP swift3
+  # S3 gateway rejects with InvalidDigest -> WAL archiving + backups fail.
+  env:
+    - name: AWS_REQUEST_CHECKSUM_CALCULATION
+      value: when_required
+    - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+      value: when_required
+
   # PostgreSQL configuration
   postgresql:
     parameters:
