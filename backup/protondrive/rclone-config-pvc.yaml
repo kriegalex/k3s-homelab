@@ -1,0 +1,17 @@
+---
+# Writable, persistent home for the live rclone.conf.
+# rclone caches the Proton session (client_* tokens) back into the config; a
+# persistent writable copy means it logs in ONCE and refreshes thereafter,
+# instead of a full Proton login on every run. Seeded on first run from the
+# protondrive-rclone-config Secret (see README.md) by the CronJob initContainer.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: protondrive-rclone-config
+  namespace: backup
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 128Mi
