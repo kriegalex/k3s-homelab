@@ -3,17 +3,23 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: nfs-anime-plex
+  labels:
+    content: nfs-anime-plex
 spec:
-  storageClassName: ""
+  storageClassName: nfs-static
+  persistentVolumeReclaimPolicy: Retain
   capacity:
-    storage: 1Mi
+    storage: 8Ti
   accessModes:
     - ReadWriteMany
+  volumeMode: Filesystem
   nfs:
-    server: 10.0.0.2
-    path: "/mnt/user/anime"
+    server: 10.0.0.7
+    path: "/anime"
   mountOptions:
-    - nfsvers=4.2
+    - nfsvers=4.1
+    - hard
+    - noatime
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -23,8 +29,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteMany
-  storageClassName: ""
+  storageClassName: nfs-static
   resources:
     requests:
-      storage: 1Mi
+      storage: 8Ti
   volumeName: nfs-anime-plex
