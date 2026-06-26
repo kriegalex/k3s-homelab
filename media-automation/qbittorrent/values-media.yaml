@@ -1,0 +1,124 @@
+# qbit-media — go-forward qBittorrent for tv/movies on the single-/data layout.
+# Chart: k8s-charts/qbittorrent >= 3.1.0.
+#
+# Role (Act-2 Path 1, "two qbits"): downloads tv/movies IN-PLACE on the Unraid
+# `data` share (PVC nfs-data, /mnt/user/data) so sonarr-tv/radarr can HARDLINK on
+# import (`/data/torrents/{tv,movies}` -> `/data/media/{tv,movies,movies-kids}`,
+# same filesystem) = one copy. lv4 is being killed: NO lv4 mount, downloads land
+# directly in /data/torrents (incomplete churn bounded by max-active-dl 2-3, set
+# in the WebUI). The legacy `qbittorrent` release keeps seeding the 672 old lv4
+# torrents untouched until the §5-C drain migrates them; then it + lv4 are
+# decommissioned and this becomes THE qbit-media (clean qbit-media + qbit-anime).
+#
+# Legacy image (qbit 4.3.9) matches the live releases -> qbittorrentConf MUST be
+# disabled (its libtorrent-v2 keys are meaningless/harmful on the v1 build).
+#
+# Install:
+#   kubectl apply -f qbit-media-config-pvc.yaml
+#   # create secret qbit-media-vpn-config (a THIRD, distinct Proton WireGuard
+#   # config -- two qbits can't share one peer key) first:
+#   #   kubectl -n media create secret generic qbit-media-vpn-config \
+#   #     --from-file=wg0.conf=/path/to/new-proton-wg.conf
+#   helm install qbit-media k8s-charts/qbittorrent --version 3.1.0 \
+#     -n media -f values-media.yaml
+#
+# Post-install (WebUI, since qbittorrentConf is off):
+#   - Default Save Path: /data/torrents ; enable "Append category to save path"
+#     (or set per-category: tv-sonarr -> /data/torrents/tv,
+#      radarr -> /data/torrents/movies). Incomplete dir: leave under /data.
+#   - Tools > Options > Downloads: Max active downloads 2-3 (array churn cap).
+
+fullnameOverride: qbit-media
+
+image:
+  repository: ghcr.io/hotio/qbittorrent
+  tag: legacy-511863b   # qbit 4.3.9, same pin as the live `qbittorrent` release
+  pullPolicy: IfNotPresent
+
+# Legacy v1 image: keep the conf-seeding init container OFF.
+qbittorrentConf:
+  enabled: false
+
+replicaCount: 1
+
+env:
+  PGID: 1000
+  PUID: 1000
+  TZ: Etc/UTC
+  UMASK: 2
+  PRIVOXY_ENABLED: false
+  UNBOUND_ENABLED: false
+  VPN_AUTO_PORT_FORWARD: true
+  VPN_CONF: wg0
+  VPN_FIREWALL_TYPE: auto
+  VPN_HEALTHCHECK_ENABLED: false
+  VPN_KEEP_LOCAL_DNS: false
+  VPN_LAN_LEAK_ENABLED: false
+  VPN_LAN_NETWORK: 10.0.0.0/24   # NFS mounts are kubelet-level; LAN bypasses the tunnel
+  WEBUI_PORTS: 8080/tcp,8080/udp
+
+vpn:
+  pia:
+    enabled: false
+  wireguard:
+    enabled: true
+    proton: true
+    existingSecret: qbit-media-vpn-config   # 3rd, distinct Proton WireGuard config
+    secretKey: wg0.conf
+    config: ""
+
+persistence:
+  config:
+    enabled: true
+    existingClaim: qbit-media-config
+  # /data IS the download target = Unraid `data` share (single-/data hardlink fs).
+  data:
+    enabled: true
+    existingClaim: nfs-data
+
+ingress:
+  className: traefik
+  enabled: true
+  hosts:
+    - host: torrent-media.k3s.home
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+
+resources:
+  limits:
+    cpu: 1
+    memory: 4Gi
+  requests:
+    cpu: 250m
+    memory: 1Gi
+
+service:
+  port: 8080
+  type: ClusterIP
+
+# Soft-prefer worker4 and avoid co-scheduling with Plex (mirrors the live qbit).
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3s-worker4
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 90
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - plex-media-server
+          namespaces:
+            - plex
+          topologyKey: kubernetes.io/hostname
