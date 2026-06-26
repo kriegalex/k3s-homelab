@@ -29,7 +29,7 @@ ingress:
     traefik.ingress.kubernetes.io/router.middlewares: "nextcloud-nextcloud-wellknown-dav@kubernetescrd,nextcloud-nextcloud-wellknown-rewrite@kubernetescrd,nextcloud-nextcloud-security-headers@kubernetescrd,nextcloud-nextcloud-cors@kubernetescrd"
   tls:
   - hosts:
-    - cloud.homelab.example.com
+    - cloud.lourenco.ch
     secretName: nextcloud-tls
   path: /
   pathType: Prefix
@@ -39,7 +39,7 @@ phpClientHttpsFix:
   protocol: https
 
 nextcloud:
-  host: cloud.homelab.example.com
+  host: cloud.lourenco.ch
   ## Use an existing secret
   existingSecret:
     enabled: true
@@ -47,7 +47,7 @@ nextcloud:
     usernameKey: nextcloud-username
     passwordKey: nextcloud-password
   trustedDomains:
-    - cloud.homelab.example.com
+    - cloud.lourenco.ch
   extraEnv:
   - name: TRUSTED_PROXIES
     value: 10.42.0.0/16
@@ -148,9 +148,9 @@ collabora:
   enabled: true
   collabora:
     aliasgroups:
-    - host: https://cloud.homelab.example.com:443
+    - host: https://cloud.lourenco.ch:443
     extra_params: --o:ssl.enable=false --o:ssl.termination=true
-    server_name: collabora.homelab.example.com
+    server_name: collabora.lourenco.ch
     username: admin
     existingSecret:
       enabled: true
@@ -170,13 +170,13 @@ collabora:
       # nginx upstream-hash-by ($arg_WOPISrc) sticky sessions are not currently
       # replicated — Collabora has been running fine without them.
     hosts:
-    - host: collabora.homelab.example.com
+    - host: collabora.lourenco.ch
       paths:
       - path: /
         pathType: ImplementationSpecific
     tls:
     - hosts:
-      - collabora.homelab.example.com
+      - collabora.lourenco.ch
       secretName: nextcloud-collabora-tls
   resources:
     requests:

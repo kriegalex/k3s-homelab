@@ -1,77 +1,76 @@
-# roles/plex/templates/values.yaml.j2
-image:
-  registry: index.docker.io
-  repository: plexinc/pms-docker
-  tag: "1.42.2.10156-f737b826c"
-  pullPolicy: IfNotPresent
-
-ingress:
-  enabled: true
-  ingressClassName: traefik
-  url: "https://plex.homelab.example.com"
-  annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-  tls:
-    - hosts:
-        - plex.homelab.example.com
-      secretName: ingress-lets-encrypt
-
-pms:
-  storageClassName: longhorn
-  configStorage: 200Gi
-  configExistingClaim: pms-config
-  gpu:
-    nvidia:
-      enabled: false
-  resources:
-    requests:
-      cpu: "1000m"
-      memory: "8Gi"
-      gpu.intel.com/i915: "1"
-    limits:
-      memory: "16Gi"
-      gpu.intel.com/i915: "1"
-
-service:
-  type: ClusterIP
-  port: 32400
-
-extraVolumeMounts:
-  - name: movies
-    mountPath: /movies
-  - name: tv
-    mountPath: /tv
-  - name: anime
-    mountPath: /anime
-
-extraVolumes:
-  - name: movies
-    persistentVolumeClaim:
-      claimName: nfs-movies-plex
-  - name: tv
-    persistentVolumeClaim:
-      claimName: nfs-tv-plex
-  - name: anime
-    persistentVolumeClaim:
-      claimName: nfs-anime-plex
-
-extraEnv:
-  TZ: "Europe/Paris"
-
+# plex-media-server — chart: plex/plex-media-server v1.5.0. Real deployed values (source of truth).
 affinity:
   nodeAffinity:
     preferredDuringSchedulingIgnoredDuringExecution:
-      - weight: 100
-        preference:
-          matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: In
-              values:
-                - k3s-worker1
+    - preference:
+        matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k3s-worker1
+      weight: 100
     requiredDuringSchedulingIgnoredDuringExecution:
       nodeSelectorTerms:
-        - matchExpressions:
-          - key: "gpu.intel.com/device-id.0300-7d55.count"
-            operator: In
-            values:
-              - "1"
+      - matchExpressions:
+        - key: gpu.intel.com/device-id.0300-7d55.count
+          operator: In
+          values:
+          - "1"
+extraEnv:
+  PLEX_CLAIM: ""
+  TZ: Europe/Paris
+extraVolumeMounts:
+- mountPath: /data
+  name: data
+- mountPath: /data/media/anime
+  name: anime
+extraVolumes:
+- name: data
+  persistentVolumeClaim:
+    claimName: nfs-data-plex
+- name: anime
+  persistentVolumeClaim:
+    claimName: nfs-data-anime-plex
+image:
+  pullPolicy: IfNotPresent
+  registry: index.docker.io
+  repository: plexinc/pms-docker
+  tag: 1.43.2.10687-563d026ea
+ingress:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  enabled: true
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - plex.lourenco.ch
+    secretName: ingress-lets-encrypt
+  url: https://plex.lourenco.ch
+pms:
+  configExistingClaim: pms-config
+  configStorage: 200Gi
+  gpu:
+    nvidia:
+      enabled: false
+  livenessProbe:
+    exec:
+      command:
+      - /bin/sh
+      - -c
+      - grep -q 10.0.0.7 /proc/mounts
+    failureThreshold: 3
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 5
+  resources:
+    limits:
+      gpu.intel.com/i915: "1"
+      memory: 16Gi
+    requests:
+      cpu: 1000m
+      gpu.intel.com/i915: "1"
+      memory: 8Gi
+  storageClassName: longhorn
+service:
+  port: 32400
+  type: ClusterIP

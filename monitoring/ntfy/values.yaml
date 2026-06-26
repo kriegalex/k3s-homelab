@@ -16,7 +16,7 @@
 ntfy:
   # Must match the public URL Traefik routes to ntfy — otherwise web-push
   # registrations and topic-share links point at example.org.
-  baseURL: "https://ntfy.homelab.example.com"
+  baseURL: "https://ntfy.lourenco.ch"
 
   # Disable the iOS-push forwarder. Chart default is https://ntfy.sh, which
   # turns on strict client-side sequence-ID validation and breaks the
@@ -46,7 +46,7 @@ ntfy:
   webPush:
     keys:
       create: true
-    emailAddress: "admin@homelab.example.com"
+    emailAddress: "admin@lourenco.ch"
 
 persistence:
   enabled: true
@@ -60,13 +60,13 @@ ingress:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     traefik.ingress.kubernetes.io/router.middlewares: "traefik-redirect-https@kubernetescrd"
   hosts:
-    - host: ntfy.homelab.example.com
+    - host: ntfy.lourenco.ch
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - ntfy.homelab.example.com
+        - ntfy.lourenco.ch
       secretName: ntfy-tls
 
 prometheus:

@@ -1,8 +1,6 @@
 image:
   repository: n8nio/n8n
   tag: "1.123.12"  # Pin to specific version for production stability
-imagePullSecrets:
-  - name: 8gears-registry-n8n
 
 ingress:
   enabled: true
@@ -14,13 +12,13 @@ ingress:
     # no equivalents to nginx proxy-body-size / proxy-buffering / proxy-request-buffering needed.
     traefik.ingress.kubernetes.io/router.middlewares: "traefik-redirect-https@kubernetescrd"
   hosts:
-    - host: n8n.homelab.example.com
+    - host: n8n.lourenco.ch
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-      - n8n.homelab.example.com
+      - n8n.lourenco.ch
       secretName: n8n-tls
 
 persistence:
@@ -33,7 +31,7 @@ persistence:
 # Official structure with main wrapper
 main:
   config:
-    webhook_url: "https://n8n.homelab.example.com/"
+    webhook_url: "https://n8n.lourenco.ch/"
     n8n:
       proxy_hops: 1
     db:

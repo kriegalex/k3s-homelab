@@ -1,0 +1,26 @@
+# valheim-server — chart: valheim-server v1.0.0.
+# Real deployed values (source of truth for `helm upgrade -f values.yaml`).
+# The server password is PII/credential — kept out of git. It is layered at
+# deploy time from the gitignored fragment:
+#   helm upgrade --install valheim-server <chart> -n game-servers \
+#     -f values.yaml -f helm-values-secret.yaml
+automation:
+  autoBackup: 1
+  autoBackupSchedule: '*/30 * * * *'
+persistence:
+  backups:
+    size: 20Gi
+  saves:
+    size: 5Gi
+resources:
+  limits:
+    cpu: 3000m
+    memory: 8Gi
+  requests:
+    cpu: 1500m
+    memory: 4Gi
+server:
+  name: Ste ApoLAN Valheim
+  password: ""   # real value in helm-values-secret.yaml (gitignored)
+  public: 1
+  world: steapolan

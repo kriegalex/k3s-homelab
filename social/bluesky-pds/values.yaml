@@ -23,7 +23,7 @@ pds:
   config:
     # CRITICAL: Your public hostname (FQDN)
     # This is how your PDS will be identified on the AT Protocol network
-    hostname: bluesky.crypto.example.com
+    hostname: bluesky.21crypto.ch
 
     # Secrets configuration
     secrets:
@@ -43,7 +43,7 @@ pds:
     crawlers: "https://bsky.network"
 
     # Email configuration
-    pdsEmailFromAddress: "noreply@homelab.example.com"
+    pdsEmailFromAddress: "noreply@lourenco.ch"
 
   # Persistent storage configuration
   dataStorage:
@@ -95,13 +95,13 @@ ingress:
 
   hosts:
     # Main PDS endpoint
-    - host: bluesky.crypto.example.com
+    - host: bluesky.21crypto.ch
       paths:
         - path: /
           pathType: Prefix
 
-    # Wildcard subdomain for user handles (e.g., alice.bluesky.crypto.example.com)
-    - host: "*.bluesky.crypto.example.com"
+    # Wildcard subdomain for user handles (e.g., alice.bluesky.21crypto.ch)
+    - host: "*.bluesky.21crypto.ch"
       paths:
         - path: /
           pathType: Prefix
@@ -110,8 +110,8 @@ ingress:
   tls:
     - secretName: bluesky-pds-tls
       hosts:
-        - bluesky.crypto.example.com
-        - "*.bluesky.crypto.example.com"
+        - bluesky.21crypto.ch
+        - "*.bluesky.21crypto.ch"
 
 ## Resource Limits
 resources:

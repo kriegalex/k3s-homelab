@@ -48,7 +48,7 @@ grafana:
       cert-manager.io/cluster-issuer: letsencrypt-prod
 
     hosts:
-      - grafana.homelab.example.com
+      - grafana.lourenco.ch
 
     ## Path for grafana ingress
     path: /
@@ -59,7 +59,7 @@ grafana:
     tls:
     - secretName: grafana-general-tls
       hosts:
-      - grafana.homelab.example.com
+      - grafana.lourenco.ch
   
   persistence:
     enabled: true

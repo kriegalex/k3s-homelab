@@ -60,14 +60,14 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
   # -- List of ingress hosts
   hosts:
-    - host: nostr-2.crypto.example.com
+    - host: nostr-2.21crypto.ch
       paths:
         - path: /
           pathType: ImplementationSpecific
   # -- Ingress TLS configuration
   tls:
     - hosts:
-        - nostr-2.crypto.example.com
+        - nostr-2.21crypto.ch
       secretName: rsrelay-ingress-tls
 
 # -- Resource limits and requests for the relay
@@ -95,11 +95,11 @@ config:
   # Info settings for NIP-11 relay information document
   info:
     # -- The public-facing URL of your relay with the websocket schema (required)
-    relay_url: "wss://nostr-2.crypto.example.com/"
+    relay_url: "wss://nostr-2.21crypto.ch/"
     # -- Name of your relay (required)
-    name: "nostr-2.crypto.example.com"
+    name: "nostr-2.21crypto.ch"
     # -- Description of your relay (required)
-    description: "rs-relay backup relay provided by crypto.example.com"
+    description: "rs-relay backup relay provided by 21crypto.ch"
     # -- Public key of the relay administrator (hexadecimal string)
     pubkey: "e78c8cf2030deb7e76dd096223b7795e2c1aab862a708bd1c5cccebdf21af45b"
     # -- Administrative contact for the relay

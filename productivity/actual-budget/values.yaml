@@ -13,20 +13,20 @@ persistence:
 
 ingress:
   enabled: true
-  url: budget.homelab.example.com
+  url: budget.lourenco.ch
   ingressClassName: traefik
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     # Traefik streams request bodies by default with no size cap — no
     # equivalent to nginx proxy-body-size needed.
   hosts:
-  - host: budget.homelab.example.com
+  - host: budget.lourenco.ch
     paths:
     - path: /
       pathType: Prefix
   tls:
   - hosts:
-    - budget.homelab.example.com
+    - budget.lourenco.ch
     secretName: actual-budget-tls
 
 service:

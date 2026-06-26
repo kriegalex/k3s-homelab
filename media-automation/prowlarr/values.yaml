@@ -14,9 +14,9 @@ service:
 
 ingress:
   enabled: true
-  ingressClassName: traefik
+  className: traefik
   hosts:
-  - host: prowlarr.local
+  - host: prowlarr.k3s.home
     paths:
     - path: /
       pathType: Prefix

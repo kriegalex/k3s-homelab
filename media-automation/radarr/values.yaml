@@ -1,13 +1,14 @@
+# radarr — chart: alekc/radarr v2.1.0. Real deployed values (source of truth).
 affinity:
   nodeAffinity:
     preferredDuringSchedulingIgnoredDuringExecution:
-      - weight: 100
-        preference:
-          matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: In
-              values:
-                - k3s-worker3
+    - preference:
+        matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k3s-worker3
+      weight: 100
   podAntiAffinity:
     preferredDuringSchedulingIgnoredDuringExecution:
     - podAffinityTerm:
@@ -26,36 +27,31 @@ image:
   repository: ghcr.io/hotio/radarr
   tag: latest
 ingress:
+  className: traefik
   enabled: true
-  ingressClassName: traefik
   hosts:
-  - host: radarr.local
+  - host: radarr.k3s.home
     paths:
     - path: /
       pathType: Prefix
 persistence:
   accessMode: ReadWriteOnce
   additionalMounts:
-  - mountPath: /media
-    name: media
-  - mountPath: /torrent
-    name: torrent
+  - mountPath: /data
+    name: data
   additionalVolumes:
-  - name: media
+  - name: data
     persistentVolumeClaim:
-      claimName: nfs-movies
-  - name: torrent
-    persistentVolumeClaim:
-      claimName: nfs-torrent
+      claimName: nfs-data
   enabled: true
   existingClaim: radarr
 resources:
-  requests:
-    cpu: 100m
-    memory: 1Gi
   limits:
     cpu: 500m
     memory: 4Gi
+  requests:
+    cpu: 100m
+    memory: 1Gi
 service:
   port: 80
   type: ClusterIP

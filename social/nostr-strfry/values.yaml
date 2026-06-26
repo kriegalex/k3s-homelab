@@ -63,14 +63,14 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
   # -- List of ingress hosts
   hosts:
-    - host: nostr.crypto.example.com
+    - host: nostr.21crypto.ch
       paths:
         - path: /
           pathType: Prefix
   # -- Ingress TLS configuration
   tls:
     - hosts:
-        - nostr.crypto.example.com
+        - nostr.21crypto.ch
       secretName: strfry-ingress-tls
 
 # -- Resource limits and requests for the relay
@@ -110,8 +110,8 @@ nip05:
   # -- NIP-05 identities mapping user public keys to relays
   relays:
     e78c8cf2030deb7e76dd096223b7795e2c1aab862a708bd1c5cccebdf21af45b:
-      - wss://nostr.crypto.example.com
-      - wss://nostr-2.crypto.example.com
+      - wss://nostr.21crypto.ch
+      - wss://nostr-2.21crypto.ch
 
 
 # Global configuration
@@ -154,9 +154,9 @@ config:
     realIpHeader: ""
     info:
       # -- NIP-11: Name of this server (< 30 characters)
-      name: "nostr.crypto.example.com"
+      name: "nostr.21crypto.ch"
       # -- NIP-11: Detailed information about relay
-      description: "main strfry relay provided by crypto.example.com"
+      description: "main strfry relay provided by 21crypto.ch"
       # -- NIP-11: Administrative nostr pubkey, for contact purposes
       pubkey: "e78c8cf2030deb7e76dd096223b7795e2c1aab862a708bd1c5cccebdf21af45b"
       # -- NIP-11: Alternative administrative contact

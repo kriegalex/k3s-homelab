@@ -107,13 +107,13 @@ server:
         # Traefik streams request bodies by default with no cap — file uploads
         # are unconstrained without an explicit Buffering middleware.
       hosts:
-        - host: immich.homelab.example.com
+        - host: immich.lourenco.ch
           paths:
             - path: "/"
       tls:
         - secretName: immich-tls
           hosts:
-            - immich.homelab.example.com
+            - immich.lourenco.ch
 
 machine-learning:
   enabled: true

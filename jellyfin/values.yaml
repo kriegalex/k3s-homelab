@@ -1,86 +1,67 @@
-
+# jellyfin — chart: k8s-charts/jellyfin v0.2.4. Real deployed values (source of truth).
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - preference:
+        matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k3s-worker1
+      weight: 100
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: gpu.intel.com/device-id.0300-7d55.count
+          operator: In
+          values:
+          - "1"
+extraVolumeMounts:
+- mountPath: /movies
+  name: movies
+- mountPath: /tv
+  name: tv
+- mountPath: /anime
+  name: anime
+- mountPath: /music
+  name: music
+extraVolumes:
+- name: movies
+  persistentVolumeClaim:
+    claimName: nfs-movies
+- name: tv
+  persistentVolumeClaim:
+    claimName: nfs-tv
+- name: anime
+  persistentVolumeClaim:
+    claimName: nfs-anime
+- name: music
+  persistentVolumeClaim:
+    claimName: nfs-music
 image:
-  tag: "latest"
-
+  pullPolicy: IfNotPresent
+  tag: 10.11.6
 ingress:
-  # Specify if an ingress resource for the pms server should be created or not
-  enabled: true
-
-  # The ingress class that should be used
-  ingressClassName: "traefik"
-
-  # The url to use for the ingress reverse proxy to point at this pms instance
-  url: "https://jellyfin.domain.com"
-
   annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    # Traefik picks up the Service port natively; no backend-protocol annotation needed.
-
-tolerations: []
-## If you dedicate a node to a media server via tainting
-# tolerations:
-# - key: "dedicated"
-#   operator: "Equal"
-#   value: "media-server"
-#   effect: "NoSchedule"
-
-affinity: {}
-## Affinity for an Intel ARC A380 (56a5)
-# affinity:
-#   nodeAffinity:
-#     requiredDuringSchedulingIgnoredDuringExecution:
-#       nodeSelectorTerms:
-#       - matchExpressions:
-#         - key: "gpu.intel.com/device-id.0300-56a5.count"
-#           operator: In
-#           values:
-#           - "1"
-
-resources: {}
-## Asking and reserving an Intel GPU resource
-# resources:
-#   limits:
-#     gpu.intel.com/i915: "1"
-#   requests:
-#     cpu: "1"
-#     gpu.intel.com/i915: "1"
-#     memory: 4Gi
-
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  enabled: false
+  ingressClassName: traefik
+  url: https://jellyfin.domain.com
 persistence:
-  # This is the directory containing the server configuration files. 
-  config:
-    enabled: true
-    existingClaim: "jellyfin-config"
-  # This is the directory containing the server cache (metadata for the libraries).
   cache:
     enabled: false
     existingClaim: ""
-
-  ## Example without "existingClaim" and with "storageClassName".
-  # config:
-  #   enabled: true
-  #   mountPath: /config
-  #   storageClassName: "jellyfin-config"
-  #   size: 20Gi # can grow to 100GB+ for big libraries
-  # cache:
-  #   enabled: true
-  #   mountPath: /cache
-  #   storageClassName: "jellyfin-cache"
-  #   size: 5Gi
-
-# Optionally specify additional volumes for the pod.
-extraVolumes:
-  - name: movies
-    persistentVolumeClaim:
-      claimName: nfs-movies
-  - name: tv
-    persistentVolumeClaim:
-      claimName: nfs-tv
-
-# Optionally specify additional volume mounts for the media.
-extraVolumeMounts:
-  - name: movies
-    mountPath: /movies
-  - name: tv
-    mountPath: /tv
-
+  config:
+    enabled: true
+    existingClaim: jellyfin-config
+resources:
+  limits:
+    gpu.intel.com/i915: "1"
+  requests:
+    cpu: "1"
+    gpu.intel.com/i915: "1"
+    memory: 4Gi
+service:
+  port: 8096
+  type: LoadBalancer
+tolerations: []

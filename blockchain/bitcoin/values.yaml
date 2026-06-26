@@ -1,7 +1,7 @@
 # Bitcoin Stack Helm Chart Values Template
 #
 # This file provides a starting template for deploying the full Bitcoin Stack.
-# Copy this to custom-values.yaml and customize for your deployment.
+# Copy this to values.yaml and customize for your deployment.
 #
 # Chart: k8s-charts/bitcoin-stack (version 1.0.0)
 # Repository: https://kriegalex.github.io/k8s-charts/

@@ -42,12 +42,12 @@ ingress:
       # Traefik Buffering Middleware in ingress/traefik/middlewares/paperless-body-64m.yaml.
       traefik.ingress.kubernetes.io/router.middlewares: "paperless-body-limit-64m@kubernetescrd"
     hosts:
-    - host: paperless.homelab.example.com
+    - host: paperless.lourenco.ch
       paths:
       - path: /
     tls:
     - hosts:
-      - paperless.homelab.example.com
+      - paperless.lourenco.ch
       secretName: paperless-ingress-tls
 
 persistence:

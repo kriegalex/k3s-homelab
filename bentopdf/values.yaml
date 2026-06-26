@@ -6,7 +6,7 @@ image:
 ingress:
   enabled: true
   className: traefik
-  url: "bentopdf.local"
+  url: "bentopdf.k3s.home"
 
 resources:
   requests:
