@@ -1,0 +1,100 @@
+---
+# Off-site backup of the irreplaceable NFS-resident user data (Immich photos,
+# Nextcloud files, Paperless docs) to Exoscale SOS (S3) — the fast, S3-native,
+# Swiss-hosted counterpart to the Proton Drive job in ../protondrive/.
+#
+# Sources are mounted read-only as inline NFS volumes straight from the
+# mediaserver (10.0.0.2) — read-only guarantees this job can never write to or
+# delete the live data.
+#
+# ZERO-KNOWLEDGE: the rclone remote is a `crypt` wrapper over the S3 bucket, so
+# Exoscale only ever stores client-side AES-encrypted blobs (filenames
+# included). This matches Proton's privacy property without Proton's throughput
+# ceiling, and keeps the data in Switzerland (ch-gva-2 / ch-dk-2 zones).
+#
+# Mode is `rclone copy` (additive — NEVER deletes on S3) so a local
+# corruption/deletion cannot propagate and wipe the only off-site copy.
+# Switch to `sync --backup-dir=...` later, once the copy is proven.
+#
+# Unlike Proton (Beta, single-stream, anti-abuse rate-limited), real S3 is
+# concurrency-safe and unthrottled, so we parallelise hard. The one constraint
+# is MEMORY: S3 multipart buffers ~= transfers * s3-upload-concurrency *
+# s3-chunk-size. 8 * 4 * 16Mi = 512Mi peak, which sits comfortably under the
+# 4Gi limit even with crypt + listing overhead. Do not raise all three at once.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: exoscale-s3-backup
+  namespace: backup
+spec:
+  schedule: "0 2 * * *"            # daily 02:00 UTC (offset from Proton's 04:00)
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 0           # read NFS as root
+          containers:
+            - name: rclone
+              image: rclone/rclone:1.74.2
+              env:
+                - name: RCLONE_CONFIG
+                  value: /config/rclone.conf
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  # S3 is concurrency-safe and unthrottled — no tpslimit needed.
+                  # --fast-list does one recursive listing (S3 supports ListR),
+                  # which makes the re-walk / incremental runs cheap. Memory is
+                  # the only lever to watch (see header); --use-mmap returns freed
+                  # buffers to the OS.
+                  COMMON="--transfers=8 --checkers=16 --fast-list \
+                          --s3-chunk-size=16Mi --s3-upload-concurrency=4 \
+                          --retries=3 --low-level-retries=10 --use-mmap \
+                          --log-level=INFO --stats=1m --stats-one-line"
+                  for pair in immich:/data/immich nextcloud:/data/nextcloud paperless:/data/paperless; do
+                    name=${pair%%:*}; src=${pair#*:}
+                    # immich's thumbs/ and encoded-video/ are derived cache that
+                    # immich regenerates from the originals (upload/) + its DB
+                    # (backed up separately via CNPG). Excluding them slims the
+                    # archive.
+                    EXTRA=""
+                    if [ "$name" = "immich" ]; then
+                      EXTRA="--exclude thumbs/** --exclude encoded-video/**"
+                    fi
+                    echo "===== copy $name ($src) -> exoscale-crypt:$name ====="
+                    # shellcheck disable=SC2086
+                    rclone copy "$src" "exoscale-crypt:$name" $COMMON $EXTRA
+                  done
+                  echo "===== all categories complete ====="
+              volumeMounts:
+                - { name: rclone-config, mountPath: /config, readOnly: true }
+                - { name: immich, mountPath: /data/immich, readOnly: true }
+                - { name: nextcloud, mountPath: /data/nextcloud, readOnly: true }
+                - { name: paperless, mountPath: /data/paperless, readOnly: true }
+              resources:
+                requests: { cpu: "250m", memory: "1Gi" }
+                # crypt is AES-bound (give CPU); 4Gi covers multipart buffers +
+                # listing with ample headroom (see header memory math).
+                limits: { cpu: "2", memory: "4Gi" }
+          volumes:
+            # rclone.conf holds both the [exoscale-s3] creds and the
+            # [exoscale-crypt] keys. Mounted read-only from the Secret — S3 auth
+            # is stateless, so there is NO session cache to persist (unlike the
+            # Proton job's PVC).
+            - name: rclone-config
+              secret:
+                secretName: exoscale-rclone-config
+            - name: immich
+              nfs: { server: 10.0.0.2, path: /mnt/user/immich, readOnly: true }
+            - name: nextcloud
+              nfs: { server: 10.0.0.2, path: /mnt/user/nextcloud, readOnly: true }
+            - name: paperless
+              nfs: { server: 10.0.0.2, path: /mnt/user/paperless/media, readOnly: true }
