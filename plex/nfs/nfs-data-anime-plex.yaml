@@ -1,0 +1,35 @@
+---
+# QNAP anime library subpath, for Plex's NESTED mount at /data/media/anime
+# (sits inside the Unraid nfs-data-plex mount at /data; kubelet mounts parent first).
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-data-anime-plex
+spec:
+  storageClassName: ""
+  capacity:
+    storage: 1Mi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: 10.0.0.7
+    path: "/data/media/anime"
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - noatime
+    - noresvport
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-data-anime-plex
+  namespace: plex
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 1Mi
+  volumeName: nfs-data-anime-plex

@@ -1,0 +1,35 @@
+---
+# QNAP `data` share (TRaSH single-/data), single fs lv7/cachedev7.
+# Mounted at /data in qbit-anime + sonarr-anime -> /data/torrents/anime + /data/media/anime.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-data-anime
+spec:
+  storageClassName: ""
+  capacity:
+    storage: 1Mi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: 10.0.0.7
+    path: "/data"
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - noatime
+    - noresvport
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-data-anime
+  namespace: media
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 1Mi
+  volumeName: nfs-data-anime
