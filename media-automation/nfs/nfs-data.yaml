@@ -2,25 +2,23 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: nfs-music
+  name: nfs-data
 spec:
   storageClassName: ""
   capacity:
-    storage: 1Ti
+    storage: 1Mi
   accessModes:
     - ReadWriteMany
   nfs:
     server: 10.0.0.2
-    path: "/mnt/user/music"
+    path: "/mnt/user/data"
   mountOptions:
     - nfsvers=4.2
-    - hard
-    - noatime
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: nfs-music
+  name: nfs-data
   namespace: media
 spec:
   accessModes:
@@ -28,5 +26,5 @@ spec:
   storageClassName: ""
   resources:
     requests:
-      storage: 1Ti
-  volumeName: nfs-music
+      storage: 1Mi
+  volumeName: nfs-data

@@ -1,0 +1,132 @@
+---
+# Off-site backup of the irreplaceable NFS-resident user data (Immich photos,
+# Nextcloud files, Paperless docs) to Proton Drive via rclone.
+#
+# Sources are mounted read-only as inline NFS volumes straight from the
+# mediaserver (10.0.0.2) — no PVCs needed, and read-only guarantees this job
+# can never write to or delete the live data.
+#
+# Mode is `rclone copy` (additive — NEVER deletes on Proton) so a local
+# corruption/deletion cannot propagate and wipe the only off-site copy.
+# Switch to `sync --backup-dir=...` later, once the copy is proven.
+#
+# Proton Drive backend is Beta (rclone docs). Pinned to rclone 1.74.2.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: protondrive-backup
+  namespace: backup
+spec:
+  schedule: "0 4 * * *"            # daily 04:00 UTC (Tier-1 RPO <= 24h)
+  concurrencyPolicy: Forbid        # never overlap (initial seed can run many hours)
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 0           # read NFS as root; PVC config writable
+          initContainers:
+            # Seed the live config from the Secret on first run only. Once the
+            # PVC holds a config (with cached session tokens), leave it alone.
+            - name: seed-config
+              image: rclone/rclone:1.74.2
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  if [ ! -f /config/rclone.conf ]; then
+                    echo "seeding /config/rclone.conf from Secret"
+                    cp /seed/rclone.conf /config/rclone.conf
+                    chmod 600 /config/rclone.conf
+                  else
+                    echo "/config/rclone.conf already present — keeping cached session"
+                  fi
+              volumeMounts:
+                - { name: rclone-config, mountPath: /config }
+                - { name: rclone-seed, mountPath: /seed, readOnly: true }
+          containers:
+            - name: rclone
+              image: rclone/rclone:1.74.2
+              env:
+                - name: RCLONE_CONFIG
+                  value: /config/rclone.conf
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  # Proton Drive backend is Beta and NOT concurrency-safe: parallel
+                  # uploads race on directory metadata and produce 422 errors
+                  # (Code=2500 "already exists" / Code=2501 "revision not found"),
+                  # leaving orphan draft files behind. transfers=1 is therefore a
+                  # HARD CAP for correctness — do NOT raise it. It also bounds peak
+                  # RAM (1 upload buffer at a time), which is why the seed no longer
+                  # OOMs. checkers can stay high (read-only listing is safe) so the
+                  # resume re-walk / steady-state incremental runs stay fast.
+                  #
+                  # Throughput is API-bound, not bandwidth-bound: large files push
+                  # ~3.5 MiB/s fine, but the many-small-files portion is gated by
+                  # --tpslimit (transactions/sec). Proton runs an ANTI-ABUSE rate
+                  # limiter; the rclone community runs tpslimit 4-5 / checkers 8 and
+                  # warns that pushing harder trips 429s that, with retries, end up
+                  # SLOWER and can flag the account. 8 is a measured nudge above the
+                  # old 5 — if sustained "429 Too many recent API requests" appears
+                  # in the logs, dial back to 5.
+                  #
+                  # --fast-list does one recursive listing instead of per-directory
+                  # walks. The check/re-walk phase is the documented bottleneck on
+                  # large trees (rclone#7413: hour-long gaps at 4000+ files); this is
+                  # the biggest safe win and is memory-cheap (a file *tree* is tens
+                  # of MB — the OOM was upload buffers, not listing). NOTE: only
+                  # helps if the Proton backend implements ListR; harmless if not.
+                  #
+                  # --max-backlog bounds the in-memory transfer queue (default 10000)
+                  # — immich's ~30k file count is what OOM-killed the first seed at
+                  # 1Gi; 2000 caps the queue and --use-mmap returns freed buffers to
+                  # the OS so RSS stays well under the 4Gi limit.
+                  COMMON="--transfers=1 --checkers=8 --retries=3 --low-level-retries=10 \
+                          --tpslimit=8 --tpslimit-burst=8 \
+                          --fast-list --max-backlog=2000 --use-mmap \
+                          --protondrive-replace-existing-draft=true \
+                          --log-level=INFO --stats=2m --stats-one-line"
+                  for pair in immich:/data/immich nextcloud:/data/nextcloud paperless:/data/paperless; do
+                    name=${pair%%:*}; src=${pair#*:}
+                    # immich's thumbs/ and encoded-video/ are derived cache that
+                    # immich regenerates from the originals (upload/) + its DB
+                    # (backed up separately via CNPG). Excluding them slims the
+                    # archive and avoids ghost-draft churn on regenerable files.
+                    EXTRA=""
+                    if [ "$name" = "immich" ]; then
+                      EXTRA="--exclude thumbs/** --exclude encoded-video/**"
+                    fi
+                    echo "===== copy $name ($src) -> protondrive:homelab-backup/$name ====="
+                    # shellcheck disable=SC2086
+                    rclone copy "$src" "protondrive:homelab-backup/$name" $COMMON $EXTRA
+                  done
+                  echo "===== all categories complete ====="
+              volumeMounts:
+                - { name: rclone-config, mountPath: /config }
+                - { name: immich, mountPath: /data/immich, readOnly: true }
+                - { name: nextcloud, mountPath: /data/nextcloud, readOnly: true }
+                - { name: paperless, mountPath: /data/paperless, readOnly: true }
+              resources:
+                requests: { cpu: "200m", memory: "1Gi" }
+                # 1Gi OOM-killed the initial seed mid-upload (left orphan drafts
+                # on Proton). immich has a huge file count; give headroom.
+                limits: { cpu: "1", memory: "4Gi" }
+          volumes:
+            - name: rclone-config
+              persistentVolumeClaim:
+                claimName: protondrive-rclone-config
+            - name: rclone-seed
+              secret:
+                secretName: protondrive-rclone-config
+            - name: immich
+              nfs: { server: 10.0.0.2, path: /mnt/user/immich, readOnly: true }
+            - name: nextcloud
+              nfs: { server: 10.0.0.2, path: /mnt/user/nextcloud, readOnly: true }
+            - name: paperless
+              nfs: { server: 10.0.0.2, path: /mnt/user/paperless/media, readOnly: true }

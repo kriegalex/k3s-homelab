@@ -72,7 +72,8 @@ declare -A MANUAL_MAPPINGS=(
     ["prowlarr"]="media-automation/prowlarr"
     ["clonarr"]="media-automation/clonarr"
     ["seerr"]="media-automation/seerr"
-    ["qbittorrent"]="media-automation/qbittorrent"
+    ["qbit-media"]="media-automation/qbittorrent"
+    ["qbit-anime"]="media-automation/qbittorrent/anime"
     ["flaresolverr"]="media-automation/flaresolverr"
     # Game servers
     ["palworld-server"]="game-servers/palworld-server"

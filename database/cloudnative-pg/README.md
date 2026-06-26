@@ -489,6 +489,58 @@ kubectl run s3-test --rm -it --image=amazon/aws-cli --restart=Never -- \
 kubectl logs -n cnpg-system -l app.kubernetes.io/name=cloudnative-pg | grep -i backup
 ```
 
+### Backups fail with `InvalidDigest` on QNAP QuObjects (newer PostgreSQL images)
+
+**Symptom**
+
+```
+ERROR: ... (InvalidDigest) when calling the PutObject operation:
+The Content-MD5 or checksum value that you specified is not valid.
+```
+
+- WAL archiving is stuck: the cluster shows `ContinuousArchiving = False` (`ContinuousArchivingFailing`) and backups never complete (`walArchivingFailing`, or a base backup that hangs in `running`).
+- On the QNAP, the bucket folder `/share/cnpg-backup/<bucket>/` contains only `.s3_multipart_uploads/` (orphaned, never-finished uploads) — no committed `<cluster>/base/` + `<cluster>/wals/`.
+
+> Note: `kubectl get backup` resolves to **Longhorn's** CRD, not CNPG's. Use the full name: `kubectl get backup.postgresql.cnpg.io -n <ns>`.
+
+**Cause** — a client/server checksum mismatch tied to the **PostgreSQL image version**:
+
+- The CNPG instance image bundles the AWS SDK (`botocore`). **botocore ≥ 1.36** (shipped in newer `postgresql:17.x` images) attaches an `x-amz-checksum-crc32` integrity checksum to every `PutObject`/`UploadPart` by default.
+- Our backup target is the QNAP **"QuObjects"** S3 endpoint (`http://10.0.0.7:8010`) — OpenStack Swift behind the legacy **`swift3`** gateway, which **rejects** that checksum → `InvalidDigest`.
+- Older images (botocore < 1.36) never send the checksum, so they keep working. That's why only *some* clusters break.
+
+| PostgreSQL image | botocore | Backups to QuObjects |
+|------------------|----------|----------------------|
+| 16.x             | 1.35.x   | ✅ works             |
+| 17.2             | < 1.36   | ✅ works             |
+| 17.5             | 1.40.x   | ❌ `InvalidDigest`   |
+
+> ⚠️ **Time bomb:** any cluster upgraded to a botocore-≥1.36 image will start failing the same way. Apply the fix below at the same time you bump the image.
+
+**Fix** — tell the SDK not to send the new checksum, via two env vars on the `Cluster` spec:
+
+```yaml
+spec:
+  env:
+    - name: AWS_REQUEST_CHECKSUM_CALCULATION
+      value: when_required
+    - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+      value: when_required
+```
+
+Applying this triggers a rolling restart of the cluster (replicas first, then a primary switchover — a few seconds of write interruption). After it settles, `ContinuousArchiving` returns to `True` and backups complete. Applied here on `n8n-db` and `event-manager-postgres` (2026-06).
+
+**Verify**
+
+```bash
+# Archiving healthy again?
+kubectl get cluster <name> -n <ns> \
+  -o jsonpath='{.status.conditions[?(@.type=="ContinuousArchiving")].status}{"\n"}'
+
+# Committed objects on the QNAP — should show base/ + wals/, not just .s3_multipart_uploads/
+ssh -p 1022 admin@10.0.0.7 'ls /share/cnpg-backup/<bucket>/<cluster>/'
+```
+
 ### Performance Issues
 
 ```bash

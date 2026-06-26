@@ -101,6 +101,12 @@ kubectl create secret generic n8n-db-backup-credentials -n n8n \
   --from-literal=ACCESS_SECRET_KEY=your_secret_key
 ```
 
+> **Note:** `n8n-db` and `event-manager-postgres` run a PostgreSQL `17.5` image whose
+> AWS SDK (botocore ≥ 1.36) sends a checksum the QNAP QuObjects S3 gateway rejects with
+> `InvalidDigest`, breaking backups. The cluster manifests set
+> `AWS_REQUEST_CHECKSUM_CALCULATION=when_required` (+ response validation) to work around it.
+> See [database/cloudnative-pg/README.md](../../database/cloudnative-pg/README.md#backups-fail-with-invaliddigest-on-qnap-quobjects-newer-postgresql-images).
+
 #### Scheduled Backups
 
 To schedule automated weekly backups, apply a `ScheduledBackup` resource:

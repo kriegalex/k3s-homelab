@@ -20,6 +20,14 @@ ingress/traefik/_live/
 **/custom-values-*.yaml
 **/*-custom-values.yaml
 
+# rclone configs carry obscured creds / crypt keys - NEVER COMMIT THESE
+# (the k8s Secret is created from them via `kubectl create secret`)
+**/rclone.conf
+
+# Python bytecode
+**/__pycache__/
+**/*.pyc
+
 # Secrets files - NEVER COMMIT THESE
 # Note: secrets-template.yaml files ARE committed (they're templates with placeholders)
 **/secrets.yaml

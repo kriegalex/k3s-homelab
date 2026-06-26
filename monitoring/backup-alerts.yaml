@@ -13,13 +13,13 @@ spec:
       rules:
         - alert: CNPGBackupStale
           expr: |
-            (time() - max by (job) (cnpg_collector_last_available_backup_timestamp)) > 129600
+            (time() - max by (job) (cnpg_collector_last_available_backup_timestamp)) > 691200
           for: 30m
           labels:
             severity: warning
           annotations:
             summary: "CNPG cluster {{ $labels.job }} has no recent backup"
-            description: "Last successful backup is {{ $value | humanizeDuration }} old (threshold 36h)."
+            description: "Last successful backup is {{ $value | humanizeDuration }} old (threshold 8d)."
 
         - alert: LonghornBackupFailed
           expr: longhorn_backup_state == 4   # 4 = error (0=New 1=Pending 2=InProgress 3=Completed 4=Error 5=Unknown)

@@ -1,0 +1,231 @@
+# Curated Unraid dashboard, Prometheus-native (node_exporter on 10.0.0.2:9100,
+# instance="unraid" — see unraid-shfs.yaml ScrapeConfig).
+#
+# Why custom: the popular community Unraid dashboards (falconexe "Ultimate UNRAID
+# Dashboard", grafana.com 7233 / 5357, the GUS stack) are all Telegraf+InfluxDB
+# and don't work against Prometheus/node_exporter. This mirrors their layout
+# (overview -> CPU -> memory -> storage -> disk I/O -> network/sensors) using the
+# metrics node_exporter exposes, and adds a dedicated shfs / FUSE-slab memory
+# panel to watch the fuse_remember=-1 inode-pinning cost.
+#
+# Loaded by the kube-prometheus-stack Grafana sidecar (label grafana_dashboard=1),
+# placed in the "Homelab" folder via the grafana_folder annotation.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unraid-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: "Homelab"
+data:
+  unraid.json: |
+    {
+      "title": "Unraid",
+      "uid": "unraid-overview",
+      "tags": ["unraid", "homelab", "node-exporter"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "editable": true,
+      "graphTooltip": 1,
+      "time": { "from": "now-6h", "to": "now" },
+      "refresh": "30s",
+      "templating": {
+        "list": [
+          {
+            "name": "DS_PROMETHEUS",
+            "label": "Data source",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": {},
+            "hide": 0
+          }
+        ]
+      },
+      "panels": [
+        { "type": "row", "title": "Overview", "id": 1, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+        {
+          "type": "stat", "id": 2, "title": "Uptime",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+          "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
+          "targets": [ { "refId": "A", "expr": "node_time_seconds{instance=\"unraid\"} - node_boot_time_seconds{instance=\"unraid\"}" } ]
+        },
+        {
+          "type": "gauge", "id": 3, "title": "CPU busy",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+          "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 90 } ] } }, "overrides": [] },
+          "targets": [ { "refId": "A", "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{instance=\"unraid\",mode=\"idle\"}[5m])))" } ]
+        },
+        {
+          "type": "gauge", "id": 4, "title": "Memory used",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+          "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 85 }, { "color": "red", "value": 95 } ] } }, "overrides": [] },
+          "targets": [ { "refId": "A", "expr": "100 * (1 - node_memory_MemAvailable_bytes{instance=\"unraid\"} / node_memory_MemTotal_bytes{instance=\"unraid\"})" } ]
+        },
+        {
+          "type": "stat", "id": 5, "title": "Memory available",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+          "fieldConfig": { "defaults": { "unit": "bytes", "color": { "mode": "fixed", "fixedColor": "green" } }, "overrides": [] },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+          "targets": [ { "refId": "A", "expr": "node_memory_MemAvailable_bytes{instance=\"unraid\"}" } ]
+        },
+        {
+          "type": "gauge", "id": 6, "title": "Array (/mnt/user) used",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+          "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 85 }, { "color": "red", "value": 92 } ] } }, "overrides": [] },
+          "targets": [ { "refId": "A", "expr": "100 * (1 - node_filesystem_avail_bytes{instance=\"unraid\",mountpoint=\"/mnt/user\"} / node_filesystem_size_bytes{instance=\"unraid\",mountpoint=\"/mnt/user\"})" } ]
+        },
+        {
+          "type": "stat", "id": 7, "title": "Load (1m)",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+          "fieldConfig": { "defaults": { "unit": "short", "decimals": 2, "color": { "mode": "fixed", "fixedColor": "purple" } }, "overrides": [] },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+          "targets": [ { "refId": "A", "expr": "node_load1{instance=\"unraid\"}" } ]
+        },
+
+        { "type": "row", "title": "CPU & Load", "id": 10, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 } },
+        {
+          "type": "timeseries", "id": 11, "title": "CPU usage by mode",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 16, "x": 0, "y": 6 },
+          "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "custom": { "drawStyle": "line", "fillOpacity": 30, "stacking": { "mode": "normal" } } }, "overrides": [] },
+          "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+          "targets": [ { "refId": "A", "legendFormat": "{{mode}}", "expr": "avg by (mode) (rate(node_cpu_seconds_total{instance=\"unraid\",mode!=\"idle\"}[5m])) * 100" } ]
+        },
+        {
+          "type": "timeseries", "id": 12, "title": "Load average",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 6 },
+          "fieldConfig": { "defaults": { "unit": "short", "min": 0, "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+          "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            { "refId": "A", "legendFormat": "1m", "expr": "node_load1{instance=\"unraid\"}" },
+            { "refId": "B", "legendFormat": "5m", "expr": "node_load5{instance=\"unraid\"}" },
+            { "refId": "C", "legendFormat": "15m", "expr": "node_load15{instance=\"unraid\"}" }
+          ]
+        },
+
+        { "type": "row", "title": "Memory", "id": 20, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 } },
+        {
+          "type": "timeseries", "id": 21, "title": "Memory usage",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 16, "x": 0, "y": 15 },
+          "fieldConfig": { "defaults": { "unit": "bytes", "min": 0, "custom": { "drawStyle": "line", "fillOpacity": 20 } }, "overrides": [] },
+          "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["last"] }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            { "refId": "A", "legendFormat": "Total", "expr": "node_memory_MemTotal_bytes{instance=\"unraid\"}" },
+            { "refId": "B", "legendFormat": "Used (excl. cache)", "expr": "node_memory_MemTotal_bytes{instance=\"unraid\"} - node_memory_MemAvailable_bytes{instance=\"unraid\"}" },
+            { "refId": "C", "legendFormat": "Available", "expr": "node_memory_MemAvailable_bytes{instance=\"unraid\"}" },
+            { "refId": "D", "legendFormat": "Cached", "expr": "node_memory_Cached_bytes{instance=\"unraid\"} + node_memory_SReclaimable_bytes{instance=\"unraid\"}" },
+            { "refId": "E", "legendFormat": "Buffers", "expr": "node_memory_Buffers_bytes{instance=\"unraid\"}" }
+          ]
+        },
+        {
+          "type": "timeseries", "id": 22, "title": "shfs / FUSE slab memory (fuse_remember watch)",
+          "description": "SUnreclaim is the closest proxy for inodes/dentries pinned by shfs fuse_remember=-1. Baseline ~150 MB; sustained growth = remember=-1 cost. Freed only by array stop/start.",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 15 },
+          "fieldConfig": { "defaults": { "unit": "bytes", "min": 0, "custom": { "drawStyle": "line", "fillOpacity": 25 } }, "overrides": [ { "matcher": { "id": "byName", "options": "Slab unreclaimable (pinned)" }, "properties": [ { "id": "custom.fillOpacity", "value": 40 }, { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } } ] } ] },
+          "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["last", "max"] }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            { "refId": "A", "legendFormat": "Slab unreclaimable (pinned)", "expr": "node_memory_SUnreclaim_bytes{instance=\"unraid\"}" },
+            { "refId": "B", "legendFormat": "Slab reclaimable", "expr": "node_memory_SReclaimable_bytes{instance=\"unraid\"}" },
+            { "refId": "C", "legendFormat": "Slab total", "expr": "node_memory_Slab_bytes{instance=\"unraid\"}" }
+          ]
+        },
+
+        { "type": "row", "title": "Storage", "id": 30, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 } },
+        {
+          "type": "bargauge", "id": 31, "title": "Filesystem usage %",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 9, "w": 10, "x": 0, "y": 24 },
+          "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 85 }, { "color": "red", "value": 92 } ] } }, "overrides": [] },
+          "options": { "displayMode": "gradient", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] } },
+          "targets": [ { "refId": "A", "legendFormat": "{{mountpoint}}", "expr": "100 * (1 - node_filesystem_avail_bytes{instance=\"unraid\",fstype!~\"tmpfs|overlay|squashfs|ramfs|nsfs\"} / node_filesystem_size_bytes{instance=\"unraid\",fstype!~\"tmpfs|overlay|squashfs|ramfs|nsfs\"})" } ]
+        },
+        {
+          "type": "table", "id": 32, "title": "Filesystem capacity",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 9, "w": 14, "x": 10, "y": 24 },
+          "fieldConfig": { "defaults": { "custom": { "align": "auto" } }, "overrides": [
+            { "matcher": { "id": "byName", "options": "Size" }, "properties": [ { "id": "unit", "value": "bytes" } ] },
+            { "matcher": { "id": "byName", "options": "Used" }, "properties": [ { "id": "unit", "value": "bytes" } ] },
+            { "matcher": { "id": "byName", "options": "Avail" }, "properties": [ { "id": "unit", "value": "bytes" } ] },
+            { "matcher": { "id": "byName", "options": "Used %" }, "properties": [ { "id": "unit", "value": "percent" }, { "id": "custom.cellOptions", "value": { "type": "gauge", "mode": "gradient" } }, { "id": "max", "value": 100 }, { "id": "min", "value": 0 } ] }
+          ] },
+          "options": { "showHeader": true },
+          "transformations": [
+            { "id": "merge" },
+            { "id": "organize", "options": { "excludeByName": { "Time": true, "instance": true, "job": true, "device": true, "fstype": true }, "renameByName": { "mountpoint": "Mount", "Value #A": "Size", "Value #B": "Used", "Value #C": "Avail", "Value #D": "Used %" } } }
+          ],
+          "targets": [
+            { "refId": "A", "format": "table", "instant": true, "expr": "node_filesystem_size_bytes{instance=\"unraid\",fstype!~\"tmpfs|overlay|squashfs|ramfs|nsfs\"}" },
+            { "refId": "B", "format": "table", "instant": true, "expr": "node_filesystem_size_bytes{instance=\"unraid\",fstype!~\"tmpfs|overlay|squashfs|ramfs|nsfs\"} - node_filesystem_avail_bytes{instance=\"unraid\",fstype!~\"tmpfs|overlay|squashfs|ramfs|nsfs\"}" },
+            { "refId": "C", "format": "table", "instant": true, "expr": "node_filesystem_avail_bytes{instance=\"unraid\",fstype!~\"tmpfs|overlay|squashfs|ramfs|nsfs\"}" },
+            { "refId": "D", "format": "table", "instant": true, "expr": "100 * (1 - node_filesystem_avail_bytes{instance=\"unraid\",fstype!~\"tmpfs|overlay|squashfs|ramfs|nsfs\"} / node_filesystem_size_bytes{instance=\"unraid\",fstype!~\"tmpfs|overlay|squashfs|ramfs|nsfs\"})" }
+          ]
+        },
+
+        { "type": "row", "title": "Disk I/O", "id": 40, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 33 } },
+        {
+          "type": "timeseries", "id": 41, "title": "Disk throughput",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 34 },
+          "fieldConfig": { "defaults": { "unit": "Bps", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [ { "matcher": { "id": "byRegexp", "options": "/ write/" }, "properties": [ { "id": "custom.transform", "value": "negative-Y" } ] } ] },
+          "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            { "refId": "A", "legendFormat": "{{device}} read", "expr": "rate(node_disk_read_bytes_total{instance=\"unraid\",device!~\"loop.*|dm-.*\"}[5m])" },
+            { "refId": "B", "legendFormat": "{{device}} write", "expr": "rate(node_disk_written_bytes_total{instance=\"unraid\",device!~\"loop.*|dm-.*\"}[5m])" }
+          ]
+        },
+        {
+          "type": "timeseries", "id": 42, "title": "Disk utilization",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 34 },
+          "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+          "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+          "targets": [ { "refId": "A", "legendFormat": "{{device}}", "expr": "100 * rate(node_disk_io_time_seconds_total{instance=\"unraid\",device!~\"loop.*|dm-.*\"}[5m])" } ]
+        },
+
+        { "type": "row", "title": "Network & Sensors", "id": 50, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 42 } },
+        {
+          "type": "timeseries", "id": 51, "title": "Network traffic",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 43 },
+          "fieldConfig": { "defaults": { "unit": "Bps", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [ { "matcher": { "id": "byRegexp", "options": "/ tx/" }, "properties": [ { "id": "custom.transform", "value": "negative-Y" } ] } ] },
+          "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            { "refId": "A", "legendFormat": "{{device}} rx", "expr": "rate(node_network_receive_bytes_total{instance=\"unraid\",device!~\"lo|veth.*|docker.*|br-.*|vnet.*\"}[5m])" },
+            { "refId": "B", "legendFormat": "{{device}} tx", "expr": "rate(node_network_transmit_bytes_total{instance=\"unraid\",device!~\"lo|veth.*|docker.*|br-.*|vnet.*\"}[5m])" }
+          ]
+        },
+        {
+          "type": "timeseries", "id": 52, "title": "Temperatures",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 6, "x": 12, "y": 43 },
+          "fieldConfig": { "defaults": { "unit": "celsius", "custom": { "drawStyle": "line", "fillOpacity": 5 }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 60 }, { "color": "red", "value": 80 } ] } }, "overrides": [] },
+          "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+          "targets": [ { "refId": "A", "legendFormat": "{{chip}} {{sensor}}", "expr": "node_hwmon_temp_celsius{instance=\"unraid\"}" } ]
+        },
+        {
+          "type": "timeseries", "id": 53, "title": "NFS server throughput",
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 6, "x": 18, "y": 43 },
+          "fieldConfig": { "defaults": { "unit": "Bps", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [ { "matcher": { "id": "byName", "options": "write" }, "properties": [ { "id": "custom.transform", "value": "negative-Y" } ] } ] },
+          "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            { "refId": "A", "legendFormat": "read", "expr": "rate(node_nfsd_disk_bytes_read_total{instance=\"unraid\"}[5m])" },
+            { "refId": "B", "legendFormat": "write", "expr": "rate(node_nfsd_disk_bytes_written_total{instance=\"unraid\"}[5m])" }
+          ]
+        }
+      ]
+    }
