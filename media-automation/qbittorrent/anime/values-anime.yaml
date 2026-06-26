@@ -1,0 +1,112 @@
+# qbit-anime — second qBittorrent instance for the Act-2 hardlink-on-import model.
+# Chart: k8s-charts/qbittorrent >= 3.1.0 (extraVolumes/extraVolumeMounts support).
+#
+# Role: downloads anime IN-PLACE on the QNAP `/anime` share (PVC nfs-anime, lv7),
+# so sonarr-anime can HARDLINK on import (`/anime/torrents` -> `/anime/library`,
+# same filesystem) = one copy. No lv4 mount, no global incomplete dir.
+#
+# Legacy image (qbit 4.3.9) is kept to match the known-good live `qbittorrent`
+# release; therefore qbittorrentConf MUST be disabled (its libtorrent-v2 mmap
+# keys are meaningless/harmful on the legacy build). See run-book Phase 4 warning.
+#
+# Install:
+#   kubectl apply -f qbittorrent-anime-config-pvc.yaml
+#   # create secret qbittorrent-anime-vpn-config (2nd Proton WireGuard config) first
+#   helm install qbit-anime k8s-charts/qbittorrent --version 3.1.0 \
+#     -n media -f values-anime.yaml
+
+fullnameOverride: qbit-anime
+
+image:
+  repository: ghcr.io/hotio/qbittorrent
+  tag: legacy-511863b   # qbit 4.3.9, same pin as the live `qbittorrent` release
+  pullPolicy: IfNotPresent
+
+# Legacy v1 image: keep the conf-seeding init container OFF (run-book Phase 4 warning).
+qbittorrentConf:
+  enabled: false
+
+replicaCount: 1
+
+env:
+  PGID: 1000
+  PUID: 1000
+  TZ: Etc/UTC
+  UMASK: 2
+  PRIVOXY_ENABLED: false
+  UNBOUND_ENABLED: false
+  VPN_AUTO_PORT_FORWARD: true
+  VPN_CONF: wg0
+  VPN_FIREWALL_TYPE: auto
+  VPN_HEALTHCHECK_ENABLED: false
+  VPN_KEEP_LOCAL_DNS: false
+  VPN_LAN_LEAK_ENABLED: false
+  VPN_LAN_NETWORK: 10.0.0.0/24   # NFS mounts are kubelet-level; LAN bypasses the tunnel
+  WEBUI_PORTS: 8080/tcp,8080/udp
+
+vpn:
+  pia:
+    enabled: false
+  wireguard:
+    enabled: true
+    proton: true
+    existingSecret: qbittorrent-anime-vpn-config   # 2nd Proton WireGuard config
+    secretKey: wg0.conf
+    config: ""
+
+persistence:
+  config:
+    enabled: true
+    existingClaim: qbittorrent-anime-config
+  # QNAP `data` share (single fs lv7) at /data. Downloads land in /data/torrents/anime
+  # and hardlink to /data/media/anime on import = one copy. TRaSH single-/data model.
+  data:
+    enabled: true
+    existingClaim: nfs-data-anime
+
+ingress:
+  className: traefik
+  enabled: true
+  hosts:
+    - host: torrent-anime.k3s.home
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+
+resources:
+  limits:
+    cpu: 1
+    memory: 4Gi
+  requests:
+    cpu: 250m
+    memory: 1Gi
+
+service:
+  port: 8080
+  type: ClusterIP
+
+# Soft-prefer worker4 and avoid co-scheduling with Plex (mirrors the live qbit).
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3s-worker4
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 90
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - plex-media-server
+          namespaces:
+            - plex
+          topologyKey: kubernetes.io/hostname
