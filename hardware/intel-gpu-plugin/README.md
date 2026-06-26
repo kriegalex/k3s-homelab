@@ -101,21 +101,21 @@ kubectl describe nodes | grep -A 5 "gpu.intel.com"
 
 For applications like Plex, Jellyfin, or Immich, add GPU resources to your Helm values:
 
-**Plex (`plex/custom-values.yaml`):**
+**Plex (`plex/values.yaml`):**
 ```yaml
 resources:
   limits:
     gpu.intel.com/i915: 1  # Request 1 Intel GPU
 ```
 
-**Jellyfin (`jellyfin/custom-values.yaml`):**
+**Jellyfin (`jellyfin/values.yaml`):**
 ```yaml
 resources:
   limits:
     gpu.intel.com/i915: 1
 ```
 
-**Immich (`immich/custom-values.yaml`):**
+**Immich (`immich/values.yaml`):**
 ```yaml
 machine-learning:
   resources:

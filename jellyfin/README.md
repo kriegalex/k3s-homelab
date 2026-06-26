@@ -16,12 +16,12 @@ helm repo add k8s-charts https://kriegalex.github.io/k8s-charts/
 
 2. Inspect and modify the default values:
 ```console
-helm show values k8s-charts/jellyfin > custom-values.yaml
+helm show values k8s-charts/jellyfin > values.yaml
 ```
 
-You can check an [example here](./custom-values.yaml).
+You can check an [example here](./values.yaml).
 
 3. Install
 ```console
-helm upgrade --install jellyfin k8s-charts/jellyfin -f custom-values.yaml
+helm upgrade --install jellyfin k8s-charts/jellyfin -f values.yaml
 ```

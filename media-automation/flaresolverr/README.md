@@ -10,7 +10,7 @@ helm repo update
 ## Install chart
 
 ```
-helm upgrade --namespace media --create-namespace --install flaresolverr k8s-home-lab/flaresolverr -f custom-values.yaml
+helm upgrade --namespace media --create-namespace --install flaresolverr k8s-home-lab/flaresolverr -f values.yaml
 ```
 
 ## Default values

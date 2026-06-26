@@ -32,13 +32,13 @@ OCI chart, no `helm repo add` needed:
 helm upgrade --install seerr \
   oci://ghcr.io/seerr-team/seerr/seerr-chart \
   -n media \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
 ## Default values reference
 
 `values.yaml` in this folder is the upstream chart's default values, kept for
-reference. Do not pass it to helm — pass `custom-values.yaml`.
+reference. Do not pass it to helm — pass `values.yaml`.
 
 ```bash
 helm show values oci://ghcr.io/seerr-team/seerr/seerr-chart > values.yaml

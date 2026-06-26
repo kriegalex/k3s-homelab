@@ -20,7 +20,7 @@ helm repo update
 ## Install chart
 
 ```
-helm upgrade --install --namespace media --create-namespace prowlarr alekc/prowlarr -f custom-values.yaml
+helm upgrade --install --namespace media --create-namespace prowlarr alekc/prowlarr -f values.yaml
 ```
 
 ### Default values

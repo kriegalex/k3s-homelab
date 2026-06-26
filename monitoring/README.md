@@ -76,7 +76,7 @@ helm repo update
 helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
   --namespace monitoring \
   --create-namespace \
-  -f custom-values.yaml \
+  -f values.yaml \
   --version 63.1.0
 ```
 
@@ -101,9 +101,9 @@ kubectl get svc -n monitoring
 
 The monitoring stack supports OAuth/SSO integration with providers like Authentik, Keycloak, Google, GitHub, etc.
 
-### Configure OAuth in custom-values.yaml
+### Configure OAuth in values.yaml
 
-Uncomment and configure the `grafana.ini` section in `custom-values.yaml`:
+Uncomment and configure the `grafana.ini` section in `values.yaml`:
 
 ```yaml
 grafana:
@@ -139,7 +139,7 @@ stringData:
   client-secret: "CHANGE_ME_OAUTH_CLIENT_SECRET"
 ```
 
-Then reference it in `custom-values.yaml`:
+Then reference it in `values.yaml`:
 
 ```yaml
 grafana:
@@ -173,11 +173,11 @@ kubectl get secret grafana-admin-credentials -n monitoring \
 
 ## Dashboards
 
-The stack includes default Prometheus dashboards. Additional Kubernetes dashboards from [dotdc/grafana-dashboards-kubernetes](https://github.com/dotdc/grafana-dashboards-kubernetes) are configured in `custom-values.yaml`.
+The stack includes default Prometheus dashboards. Additional Kubernetes dashboards from [dotdc/grafana-dashboards-kubernetes](https://github.com/dotdc/grafana-dashboards-kubernetes) are configured in `values.yaml`.
 
 ### Included Dashboards
 
-The `custom-values.yaml` configures these Kubernetes dashboards:
+The `values.yaml` configures these Kubernetes dashboards:
 
 - **k8s-system-api-server**: API server metrics
 - **k8s-system-coredns**: CoreDNS metrics
@@ -197,7 +197,7 @@ These dashboards are automatically provisioned from the official repository.
 
 ### Add Custom Dashboards
 
-To add more dashboards, update the `dashboards` section in `custom-values.yaml`:
+To add more dashboards, update the `dashboards` section in `values.yaml`:
 
 ```yaml
 grafana:
@@ -281,7 +281,7 @@ If you're migrating from the k3s-ansible `prometheus` role:
 | k3s-ansible | k8s-homelab |
 |-------------|-------------|
 | Ansible role with Jinja2 templates | Manual Helm install |
-| Variables in `defaults/main.yml` | Helm values in `custom-values.yaml` |
+| Variables in `defaults/main.yml` | Helm values in `values.yaml` |
 | OAuth vars: `prometheus_grafana_openid_*` | OAuth in `grafana.ini` section |
 | Chart version: v63.1.0 | Same version, update as needed |
 
@@ -295,14 +295,14 @@ If you're migrating from the k3s-ansible `prometheus` role:
 
 2. **Review OAuth configuration** (if enabled):
    - k3s-ansible used `prometheus_grafana_openid_enabled: true`
-   - In k8s-homelab, uncomment OAuth section in `custom-values.yaml`
+   - In k8s-homelab, uncomment OAuth section in `values.yaml`
    - Transfer OAuth credentials to `secrets.yaml`
 
 3. **Apply updated configuration:**
    ```bash
    helm upgrade prometheus prometheus-community/kube-prometheus-stack \
      --namespace monitoring \
-     -f custom-values.yaml \
+     -f values.yaml \
      --version 63.1.0
    ```
 
@@ -323,7 +323,7 @@ prometheus_grafana_openid_enabled: true
 prometheus_grafana_openid_client_id: "grafana-client"
 prometheus_grafana_openid_client_secret: "secret"
 
-# k8s-homelab (custom-values.yaml)
+# k8s-homelab (values.yaml)
 grafana:
   admin:
     existingSecret: grafana-admin-credentials
@@ -344,7 +344,7 @@ If you used OAuth in k3s-ansible:
 
 1. **Identify OAuth variables** from your Ansible inventory
 2. **Create secrets.yaml** with OAuth credentials
-3. **Uncomment OAuth section** in `custom-values.yaml`
+3. **Uncomment OAuth section** in `values.yaml`
 4. **Update URLs and client credentials**
 5. **Apply secrets:** `kubectl apply -f secrets.yaml`
 6. **Upgrade Helm release** with new values

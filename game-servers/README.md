@@ -89,7 +89,7 @@ Game servers are resource-intensive:
 - **Memory**: 4-8GB RAM minimum
 - **Storage**: 10-50GB depending on world size
 
-Configure resource limits in `custom-values.yaml` to prevent server lag.
+Configure resource limits in `values.yaml` to prevent server lag.
 
 ### Backup Strategy
 
@@ -107,7 +107,7 @@ Most game server Helm charts support automatic updates:
 
 ```bash
 helm repo update
-helm upgrade <release-name> <chart> -f custom-values.yaml
+helm upgrade <release-name> <chart> -f values.yaml
 ```
 
 Check release notes for breaking changes or required migrations.
@@ -163,7 +163,7 @@ kubectl rollout restart statefulset/<release-name> -n game-servers
 Each game server directory contains:
 
 - **README.md** - Installation and configuration guide
-- **custom-values.yaml** - Helm value overrides
+- **values.yaml** - Helm value overrides
 - **secrets-template.yaml** - Secret configuration template
 
 Navigate to individual game server folders for detailed instructions.

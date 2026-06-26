@@ -34,7 +34,7 @@ Then install the helm chart:
 
   ```bash
   # If the namespace doens't exist
-  helm upgrade --install radarr alekc/radarr --namespace media --create-namespace -f custom-values.yaml
+  helm upgrade --install radarr alekc/radarr --namespace media --create-namespace -f values.yaml
   ```
 
 ### Default values

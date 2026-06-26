@@ -14,10 +14,10 @@ kubectl create namespace ntfy
 # 1. Edit secrets-template.yaml (placeholders → real passwords),
 #    save as ntfy-secrets.yaml (gitignored), then apply:
 kubectl apply -f ntfy-secrets.yaml
-# 2. Create helm-values.yaml (gitignored) with your real domain — see
+# 2. Create helm-values-secret.yaml (gitignored) with your real domain — see
 #    "Personal overrides" under Configuration below.
 helm upgrade --install ntfy oci://codeberg.org/wrenix/helm-charts/ntfy \
-  --version 0.5.15 -n ntfy -f values.yaml -f helm-values.yaml
+  --version 0.5.15 -n ntfy -f values.yaml -f helm-values-secret.yaml
 # After the pod is Ready, bootstrap users (see §3).
 ```
 
@@ -44,11 +44,11 @@ One topic per source so each can be muted/unsubscribed independently:
 
 Subscribe to all three from the ntfy Android/iOS app.
 
-### Personal overrides (`helm-values.yaml`)
+### Personal overrides (`helm-values-secret.yaml`)
 
 `values.yaml` uses generic `homelab.example.com` placeholders so anyone can
 clone the repo and read the config without surprises. Before deploying, create
-a gitignored `helm-values.yaml` with your real domain and admin contact email:
+a gitignored `helm-values-secret.yaml` with your real domain and admin contact email:
 
 ```yaml
 ntfy:
@@ -68,7 +68,7 @@ ingress:
       secretName: ntfy-tls
 ```
 
-This file is layered via `-f helm-values.yaml` in the install command and is
+This file is layered via `-f values.yaml` in the install command and is
 never committed.
 
 ### Files in this folder
@@ -78,7 +78,7 @@ never committed.
 | `values.yaml`              | Helm overrides vs upstream defaults. Committed source of truth.      |
 | `secrets-template.yaml`    | Placeholder Secret with bootstrap credentials. Committed.            |
 | `ntfy-secrets.yaml`        | (gitignored) Real bootstrap credentials.                             |
-| `helm-values.yaml`         | (gitignored) Snapshot of the live release values.                    |
+| `helm-values-secret.yaml`         | (gitignored) Snapshot of the live release values.                    |
 
 ### Why these overrides
 
@@ -126,7 +126,7 @@ To add personal subscriber accounts later, repeat `ntfy user add` and grant
 
 ```bash
 helm -n ntfy upgrade ntfy oci://codeberg.org/wrenix/helm-charts/ntfy \
-  --version <new-version> -f values.yaml
+  --version <new-version> -f values.yaml -f helm-values-secret.yaml
 ```
 
 Bump the version pin in `values.yaml`'s header comment and in this README's

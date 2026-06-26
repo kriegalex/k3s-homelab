@@ -102,7 +102,7 @@ kubectl create namespace k8up-system
 helm upgrade --install k8up k8up-io/k8up \
   --namespace k8up-system \
   --create-namespace \
-  -f custom-values.yaml \
+  -f values.yaml \
   --version 4.8.3
 ```
 
@@ -803,7 +803,7 @@ If you're migrating from the k3s-ansible `k8up` role:
    helm upgrade --install k8up k8up-io/k8up \
      --namespace k8up-system \
      --create-namespace \
-     -f custom-values.yaml \
+     -f values.yaml \
      --version 4.8.3
    ```
 

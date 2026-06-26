@@ -172,7 +172,7 @@ kubectl apply -f electrs-nfs-pv.yaml
 
 ### 4. Customize Helm Values
 
-Create `custom-values.yaml`:
+Create `values.yaml`:
 
 ```yaml
 # Basic Bitcoin Core configuration
@@ -272,7 +272,7 @@ helm upgrade --install bitcoin-stack k8s-charts/bitcoin-stack \
   --namespace bitcoin \
   --create-namespace \
   --version 1.0.0 \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
 ### 6. Verify Deployment
@@ -536,7 +536,7 @@ helm repo update
 helm upgrade bitcoin-stack k8s-charts/bitcoin-stack \
   --namespace bitcoin \
   --version <new-version> \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
 **Note:** Always backup before upgrading.

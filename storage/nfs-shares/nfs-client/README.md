@@ -101,7 +101,7 @@ helm repo update
 
 ### Step 2: Configure NFS Settings
 
-Edit `custom-values.yaml` and replace the placeholder values:
+Edit `values.yaml` and replace the placeholder values:
 
 ```yaml
 nfs:
@@ -116,7 +116,7 @@ helm upgrade --install nfs-subdir-external-provisioner \
   nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
   --namespace default \
   --version 4.0.18 \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
 **Note:** This chart can be installed in any namespace. The default namespace is used in this example.
@@ -340,7 +340,7 @@ kubectl get storageclass nfs-client
 **Common causes:**
 - NFS server unreachable from nodes
 - nfs-common not installed on nodes
-- Incorrect NFS server IP or path in custom-values.yaml
+- Incorrect NFS server IP or path in values.yaml
 - NFS export permissions deny access
 
 **Solutions:**
@@ -369,7 +369,7 @@ sudo journalctl -u kubelet -f
 - Stale NFS mount on node
 
 **Solutions:**
-- Verify NFS mount options in custom-values.yaml
+- Verify NFS mount options in values.yaml
 - Check NFS server permissions (no_root_squash may be needed)
 - Clean up stale mounts on node:
   ```bash
@@ -424,13 +424,13 @@ kubectl describe pod -l app=nfs-subdir-external-provisioner
 - Missing RBAC permissions
 
 **Solution:**
-Verify and update custom-values.yaml, then upgrade Helm release:
+Verify and update values.yaml, then upgrade Helm release:
 ```bash
 helm upgrade nfs-subdir-external-provisioner \
   nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
   --namespace default \
   --version 4.0.18 \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
 ### 5. Slow Performance
@@ -488,7 +488,7 @@ helm upgrade nfs-subdir-external-provisioner \
   nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
   --namespace default \
   --version <NEW_VERSION> \
-  -f custom-values.yaml
+  -f values.yaml
 
 # Verify
 kubectl rollout status deployment/nfs-subdir-external-provisioner
@@ -555,8 +555,8 @@ Since NFS doesn't enforce quota at the PVC level:
   - `nfs_client_enabled` → Removed (deployment is manual)
   - `nfs_client_namespace` → Documented as `default` (can be changed)
   - `nfs_client_chart_version` → Documented in README (v4.0.18)
-  - `nfs_client_server` → `CHANGE_ME_NFS_SERVER_IP` in custom-values.yaml
-  - `nfs_client_path` → `CHANGE_ME_NFS_EXPORT_PATH` in custom-values.yaml
+  - `nfs_client_server` → `CHANGE_ME_NFS_SERVER_IP` in values.yaml
+  - `nfs_client_path` → `CHANGE_ME_NFS_EXPORT_PATH` in values.yaml
 
 ### Differences from Ansible Deployment
 
@@ -590,7 +590,7 @@ sudo mount -t nfs <SERVER>:<PATH> /mnt/test
 # Install provisioner
 helm upgrade --install nfs-subdir-external-provisioner \
   nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
-  --namespace default --version 4.0.18 -f custom-values.yaml
+  --namespace default --version 4.0.18 -f values.yaml
 
 # Check provisioner
 kubectl get pods -l app=nfs-subdir-external-provisioner

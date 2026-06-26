@@ -53,7 +53,7 @@ kubectl create secret generic gitea-admin-secret \
 
 ```console
 helm repo add k8s-charts https://kriegalex.github.io/k8s-charts/
-helm install gitea k8s-charts/gitea -f custom-values.yaml
+helm install gitea k8s-charts/gitea -f values.yaml
 ```
 
 ## (optional) Backup and restore existing docker 

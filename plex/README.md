@@ -199,7 +199,7 @@ Labels:             beta.kubernetes.io/arch=amd64
                     kubernetes.io/os=linux
 ```
 
-We want to know the ID of our GPU, in this example `0300-56a5`. This will be useful for the [custom values](./plex/custom-values.yaml) during the [Plex installation](./plex/README.md).
+We want to know the ID of our GPU, in this example `0300-56a5`. This will be useful for the [custom values](./plex/values.yaml) during the [Plex installation](./plex/README.md).
 
 #### Verify the cluster plugin
 
@@ -242,10 +242,10 @@ helm repo add plex https://raw.githubusercontent.com/plexinc/pms-docker/gh-pages
 2. Inspect and modify the default values:
 
 ```
-helm show values plex/plex-media-server > custom-values.yaml
+helm show values plex/plex-media-server > values.yaml
 ```
 
-You can check an [example here](./custom-values.yaml).
+You can check an [example here](./values.yaml).
 
 3. Create the pms-config [PersistentVolume](./plex-pv.yaml):
 
@@ -272,7 +272,7 @@ spec:
  4. Install Plex
 
 ```
-helm install plex-media-server plex/plex-media-server -f custom-values.yaml
+helm install plex-media-server plex/plex-media-server -f values.yaml
 ```
 
 If you want to import an existing library, don't setup the server yet. Otherwise, you can go ahead and start the setup.

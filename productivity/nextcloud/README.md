@@ -121,10 +121,10 @@ helm repo update
 helm upgrade --install nextcloud nextcloud/nextcloud \
   --namespace nextcloud \
   --create-namespace \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
-**Important:** Ensure your `custom-values.yaml` references the secrets:
+**Important:** Ensure your `values.yaml` references the secrets:
 ```yaml
 nextcloud:
   existingSecret:

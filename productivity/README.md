@@ -253,7 +253,7 @@ kubectl logs -n gitea <pod-name> | grep migration
 Each application directory contains:
 
 - **README.md** - Installation and configuration guide
-- **custom-values.yaml** - Helm value overrides
+- **values.yaml** - Helm value overrides
 - **secrets-template.yaml** - Secret configuration template (if applicable)
 
 Navigate to individual application folders for detailed instructions.

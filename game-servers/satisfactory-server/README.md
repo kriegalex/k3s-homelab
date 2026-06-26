@@ -13,5 +13,5 @@ helm repo update
 helm upgrade --install satisfactory-server naj98/satisfactory \
   --namespace game-servers \
   --create-namespace \
-  -f custom-values.yaml
+  -f values.yaml
 ```

@@ -92,22 +92,22 @@ sudo chown 1001:1001 /mnt/paperless/psql
 **Prerequisites:**
 - CloudNativePG (CNPG) operator must be installed for database
 - Secrets must be created (see above)
-- Update custom-values.yaml to use secrets and envFrom
+- Update values.yaml to use secrets and envFrom
 
 ### OCI (Recommended)
 
 ```bash
-# Ensure custom-values.yaml uses secrets via envFrom
+# Ensure values.yaml uses secrets via envFrom
 helm upgrade --install paperless-ngx oci://ghcr.io/gabe565/charts/paperless-ngx \
   -n paperless \
   --create-namespace \
-  -f custom-values.yaml
+  -f values.yaml
 
 # View default values
 helm show values oci://ghcr.io/gabe565/charts/paperless-ngx > default-values.yaml
 ```
 
-**Important:** Ensure your `custom-values.yaml` loads secrets via envFrom:
+**Important:** Ensure your `values.yaml` loads secrets via envFrom:
 ```yaml
 envFrom:
   - secretRef:
@@ -129,7 +129,7 @@ helm show values k8s-charts/paperless-ngx > default-values.yaml
 ```
 
 ```console
-helm upgrade --install -n paperless --create-namespace paperless-ngx gabe565/paperless-ngx -f custom-values.yaml
+helm upgrade --install -n paperless --create-namespace paperless-ngx gabe565/paperless-ngx -f values.yaml
 ```
 
 Create the first superuser:

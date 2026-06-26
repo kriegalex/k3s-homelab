@@ -62,7 +62,7 @@ helm repo add immich-charts https://immich-app.github.io/immich-charts
 helm repo update
 
 # View default values
-helm show values immich-charts/immich > custom-values.yaml
+helm show values immich-charts/immich > values.yaml
 ```
 
 > Adapt any needed values. Check [the original repository](https://github.com/immich-app/immich-charts) for more information.
@@ -86,7 +86,7 @@ controllers:
 helm upgrade --install immich immich-charts/immich \
   -n immich \
   --create-namespace \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
 ## Uninstall

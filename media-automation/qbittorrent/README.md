@@ -109,7 +109,7 @@ kubectl create secret generic vpn-pia-credentials \
 
 **Prerequisites:**
 - VPN secret must be created (see above)
-- custom-values.yaml must NOT contain inline VPN config
+- values.yaml must NOT contain inline VPN config
 
 1. **Add the Helm chart repo:**
 
@@ -121,10 +121,10 @@ helm repo update
 2. **Inspect & modify the default values:**
 
 ```bash
-helm show values k8s-charts/qbittorrent > custom-values.yaml
+helm show values k8s-charts/qbittorrent > values.yaml
 ```
 
-**Important:** Update `custom-values.yaml` to remove inline VPN config and use the secret instead:
+**Important:** Update `values.yaml` to remove inline VPN config and use the secret instead:
 ```yaml
 vpn:
   enabled: true
@@ -142,10 +142,10 @@ vpn:
 helm upgrade --install qbittorrent k8s-charts/qbittorrent \
   --namespace media \
   --create-namespace \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
-**Note:** If the chart doesn't support mounting secrets directly, you may need to manually mount the secret as a volume in your custom-values.yaml.
+**Note:** If the chart doesn't support mounting secrets directly, you may need to manually mount the secret as a volume in your values.yaml.
 
 ## QBittorrent login
 

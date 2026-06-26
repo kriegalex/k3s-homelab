@@ -54,7 +54,7 @@ controllers:
 ```bash
 helm repo add k8s-charts https://kriegalex.github.io/k8s-charts/
 helm repo update
-helm show values k8s-charts/deltabadger > custom-values.yaml
+helm show values k8s-charts/deltabadger > values.yaml
 ```
 
 > Adapt any needed values. Check [the original repository](https://github.com/kriegalex/k8s-charts/tree/main/charts/deltabadger) for more information.
@@ -63,12 +63,12 @@ helm show values k8s-charts/deltabadger > custom-values.yaml
 helm upgrade --install deltabadger k8s-charts/deltabadger \
   --namespace deltabadger \
   --create-namespace \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
 ## Storage
 
-The chart provisions a **50Gi Longhorn PVC** automatically (configured in `custom-values.yaml`). No manual PV/PVC setup is needed.
+The chart provisions a **50Gi Longhorn PVC** automatically (configured in `values.yaml`). No manual PV/PVC setup is needed.
 
 ## Verify
 

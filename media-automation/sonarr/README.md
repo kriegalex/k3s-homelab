@@ -36,12 +36,12 @@ Then install the helm chart:
 
   ```bash
   # If the namespace doens't exist
-  helm upgrade --install sonarr-tv alekc/sonarr --namespace media --create-namespace -f tv-custom-values.yaml
+  helm upgrade --install sonarr-tv alekc/sonarr --namespace media --create-namespace -f values-tv.yaml
   ```
 
   ```bash
   # If the namespace doens't exist
-  helm upgrade --install sonarr-anime alekc/sonarr --namespace media --create-namespace -f anime-custom-values.yaml
+  helm upgrade --install sonarr-anime alekc/sonarr --namespace media --create-namespace -f values-anime.yaml
   ```
 
 ### Default values

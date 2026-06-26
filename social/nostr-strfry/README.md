@@ -71,7 +71,7 @@ nostr.crypto.example.com    A    <INGRESS_IP>
 
 ### 4. Customize Helm Values
 
-Edit `custom-values.yaml` with your specific configuration:
+Edit `values.yaml` with your specific configuration:
 
 ```yaml
 # Replica count
@@ -152,7 +152,8 @@ helm upgrade --install nostr-strfry k8s-charts/nostr-strfry \
   --namespace nostr \
   --create-namespace \
   --version 1.1.2 \
-  -f custom-values.yaml
+  -f values.yaml \
+  -f helm-values-secret.yaml
 ```
 
 ### 6. Verify Deployment
@@ -414,7 +415,8 @@ helm repo update
 helm upgrade nostr-strfry k8s-charts/nostr-strfry \
   --namespace nostr \
   --version <new-version> \
-  -f custom-values.yaml
+  -f values.yaml \
+  -f helm-values-secret.yaml
 ```
 
 > **Note:** Always backup the database before upgrading!

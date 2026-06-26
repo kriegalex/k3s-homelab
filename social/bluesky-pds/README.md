@@ -130,7 +130,7 @@ kubectl apply -f secrets.yaml
 
 ### 6. Customize Helm Values
 
-Create `custom-values.yaml`:
+Create `values.yaml`:
 
 ```yaml
 # Replica count
@@ -238,7 +238,7 @@ helm upgrade --install bluesky-pds nerkho/bluesky-pds \
   --namespace bluesky-pds \
   --create-namespace \
   --version 0.3.0 \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
 ### 8. Verify Deployment
@@ -472,7 +472,7 @@ helm repo update
 helm upgrade bluesky-pds nerkho/bluesky-pds \
   --namespace bluesky-pds \
   --version <new-version> \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
 > **Note:** Always backup before upgrading!

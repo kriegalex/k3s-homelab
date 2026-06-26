@@ -53,7 +53,7 @@ helm upgrade --install palworld-server k8s-charts/palworld-server \
   --namespace game-servers \
   --create-namespace \
   --version 1.1.0 \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
 ## How It Works
@@ -64,7 +64,7 @@ The chart (v1.1.0+) supports `secret.existingSecret` to reference a pre-created 
 ✅ **Uses Kubernetes-native secret management** - Leverages built-in security features
 ✅ **Follows Docker container requirements** - Secret keys must match environment variable names (`ADMIN_PASSWORD`, `SERVER_PASSWORD`)
 
-The custom-values.yaml file references the secret:
+The values.yaml file references the secret:
 ```yaml
 secret:
   existingSecret: palworld-server-credentials

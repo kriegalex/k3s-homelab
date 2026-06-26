@@ -63,5 +63,5 @@ kubectl apply -f ../../storage/nfs-shares/nfs-music.yaml
 
 Install:
 ```bash
-helm -n media upgrade --install lidarr k8s-home-lab/lidarr -f custom-values.yaml
+helm -n media upgrade --install lidarr k8s-home-lab/lidarr -f values.yaml
 ```

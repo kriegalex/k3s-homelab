@@ -18,12 +18,12 @@ helm repo update
 ## Custom values
 
 ```console
-helm show values mojo2600/pihole > custom-values.yaml
+helm show values mojo2600/pihole > values.yaml
 ```
 
 ## Install chart
 
 ```
-helm upgrade --install pihole mojo2600/pihole -f custom-values.yaml
+helm upgrade --install pihole mojo2600/pihole -f values.yaml
 ```
 

@@ -72,7 +72,7 @@ helm upgrade --install longhorn longhorn/longhorn \
   --namespace longhorn-system \
   --create-namespace \
   --version 1.8.1-rc2 \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
 **Chart version note:** This deployment uses Longhorn 1.8.1-rc2. Check [Longhorn releases](https://github.com/longhorn/longhorn/releases) for the latest stable version.
@@ -117,7 +117,7 @@ kubectl get nodes -n longhorn-system
 
 ## Configuration
 
-The `custom-values.yaml` configures Longhorn with production-ready defaults.
+The `values.yaml` configures Longhorn with production-ready defaults.
 
 ### Storage Class Settings
 
@@ -336,7 +336,7 @@ stringData:
 
 ### Step 2: Configure Backup Target
 
-Edit `custom-values.yaml` and uncomment the backup settings:
+Edit `values.yaml` and uncomment the backup settings:
 
 ```yaml
 defaultSettings:
@@ -357,7 +357,7 @@ Apply the updated configuration:
 helm upgrade longhorn longhorn/longhorn \
   --namespace longhorn-system \
   --version 1.8.1-rc2 \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
 ### Step 3: Create Recurring Backup Jobs
@@ -806,7 +806,7 @@ helm search repo longhorn/longhorn --versions
 helm upgrade longhorn longhorn/longhorn \
   --namespace longhorn-system \
   --version <NEW_VERSION> \
-  -f custom-values.yaml
+  -f values.yaml
 
 # 5. Monitor upgrade progress
 kubectl get pods -n longhorn-system -w
@@ -969,9 +969,9 @@ Use Longhorn's monitoring capabilities:
   - `longhorn_enabled` → Removed (deployment is manual)
   - `longhorn_namespace` → Documented as `longhorn-system`
   - `longhorn_chart_version` → Documented in README (1.8.1-rc2)
-  - `longhorn_reclaim_policy` → `persistence.reclaimPolicy` in custom-values.yaml
-  - `longhorn_dashboard_enabled` → `ingress.enabled` in custom-values.yaml
-  - `longhorn_minio_backup_enabled` → `defaultSettings.backupTarget` in custom-values.yaml
+  - `longhorn_reclaim_policy` → `persistence.reclaimPolicy` in values.yaml
+  - `longhorn_dashboard_enabled` → `ingress.enabled` in values.yaml
+  - `longhorn_minio_backup_enabled` → `defaultSettings.backupTarget` in values.yaml
   - `longhorn_minio_endpoint` → S3 endpoint in secrets.yaml
   - `longhorn_minio_backup_key` → `AWS_ACCESS_KEY_ID` in secrets.yaml
   - `longhorn_minio_backup_secret` → `AWS_SECRET_ACCESS_KEY` in secrets.yaml
@@ -983,7 +983,7 @@ Use Longhorn's monitoring capabilities:
 1. **Updated Chart Version:** Using 1.8.1-rc2 (latest features and bug fixes)
 2. **Separate Ingress Manifest:** Better control over UI exposure vs Helm ingress
 3. **Secrets Template:** Structured template for S3/MinIO credentials
-4. **Comprehensive Configuration:** Extended custom-values.yaml with production settings
+4. **Comprehensive Configuration:** Extended values.yaml with production settings
 5. **Detailed Troubleshooting:** Step-by-step debugging for common issues
 6. **Backup/Restore Guide:** Complete S3 backup setup and restore procedures
 

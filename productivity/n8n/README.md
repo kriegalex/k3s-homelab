@@ -34,7 +34,7 @@ kubectl apply -f n8n-secrets.yaml -n n8n
 # Wait for database to be ready
 kubectl wait --for=condition=Ready cluster/n8n-db -n n8n --timeout=300s
 # Then deploy n8n
-helm -n n8n upgrade --install n8n oci://8gears.container-registry.com/library/n8n -f custom-values.yaml
+helm -n n8n upgrade --install n8n oci://8gears.container-registry.com/library/n8n -f values.yaml
 ```
 
 ## Configuration
@@ -167,7 +167,7 @@ This replaces the existing cluster with a fresh one bootstrapped from S3.
 
 1. Scale down n8n to avoid database writes during restore:
    ```bash
-   helm -n n8n upgrade --install n8n oci://8gears.container-registry.com/library/n8n -f custom-values.yaml --set main.replicaCount=0
+   helm -n n8n upgrade --install n8n oci://8gears.container-registry.com/library/n8n -f values.yaml --set main.replicaCount=0
    ```
 
 2. Delete the existing CNPG cluster (this also removes PVCs):
@@ -219,7 +219,7 @@ This replaces the existing cluster with a fresh one bootstrapped from S3.
 
 6. Redeploy n8n at full replica count:
    ```bash
-   helm -n n8n upgrade --install n8n oci://8gears.container-registry.com/library/n8n -f custom-values.yaml
+   helm -n n8n upgrade --install n8n oci://8gears.container-registry.com/library/n8n -f values.yaml
    ```
 
 **Point-in-time recovery (PITR):**

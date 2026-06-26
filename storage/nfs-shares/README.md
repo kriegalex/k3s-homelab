@@ -13,7 +13,7 @@ The cluster provides three storage solutions:
 Configuration files:
 - Media libraries: `media-automation/nfs/` (base) and `plex/nfs/` (Plex namespace)
 - App-specific NFS storage: Located in each application's `nfs/` directory
-- Longhorn configuration: `storage/longhorn/custom-values.yaml`
+- Longhorn configuration: `storage/longhorn/values.yaml`
 - NFS Provisioner config: `storage/nfs-shares/provisioner/`
 
 ## Storage Options Comparison
@@ -170,7 +170,7 @@ Longhorn provides distributed block storage with replication and high availabili
 
 ### Features
 
-- **2-replica high availability** (configured in custom-values.yaml)
+- **2-replica high availability** (configured in values.yaml)
 - **Snapshot and backup support**
 - **Web UI for management** (can be exposed via ingress)
 - **Automatic volume replication** across nodes
@@ -178,7 +178,7 @@ Longhorn provides distributed block storage with replication and high availabili
 ### Configuration
 
 **Storage Class:** `longhorn` (default storage class)
-**Config Location:** `storage/longhorn/custom-values.yaml`
+**Config Location:** `storage/longhorn/values.yaml`
 
 Key settings:
 - `defaultReplicaCount: 2` - Each volume is replicated twice
@@ -335,7 +335,7 @@ Uses static NFS for media, Longhorn or hostPath for config:
 kubectl apply -f /home/mlourenco/workspace/k3s-homelab/media-automation/nfs/nfs-movies.yaml
 
 # Install with Helm
-helm install radarr k8s-at-home/radarr -f radarr/custom-values.yaml
+helm install radarr k8s-at-home/radarr -f radarr/values.yaml
 ```
 
 Helm values reference the NFS PVC:
@@ -361,7 +361,7 @@ Uses static NFS for data:
 kubectl apply -f /home/mlourenco/workspace/k3s-homelab/productivity/nextcloud/nfs/nfs-nextcloud.yaml
 
 # Install with Helm
-helm install nextcloud nextcloud/nextcloud -f nextcloud/custom-values.yaml
+helm install nextcloud nextcloud/nextcloud -f nextcloud/values.yaml
 ```
 
 ### High-Availability Database

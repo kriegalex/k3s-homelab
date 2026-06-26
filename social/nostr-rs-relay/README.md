@@ -70,7 +70,7 @@ nostr-2.crypto.example.com    A    <INGRESS_IP>
 
 ### 4. Customize Helm Values
 
-Edit `custom-values.yaml` with your specific configuration:
+Edit `values.yaml` with your specific configuration:
 
 ```yaml
 # Replica count
@@ -156,7 +156,7 @@ helm upgrade --install nostr-rs-relay k8s-charts/nostr-rs-relay \
   --namespace nostr \
   --create-namespace \
   --version 1.0.1 \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
 ### 6. Verify Deployment
@@ -358,7 +358,7 @@ helm repo update
 helm upgrade nostr-rs-relay k8s-charts/nostr-rs-relay \
   --namespace nostr \
   --version <new-version> \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
 > **Note:** Always backup the database before upgrading!

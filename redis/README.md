@@ -11,11 +11,11 @@ kubectl create -f redis-master-pvc.yaml
 (optional) Inspect & modify the default values :
 
 ```console
-helm show values oci://registry-1.docker.io/bitnamicharts/redis > custom-values.yaml
+helm show values oci://registry-1.docker.io/bitnamicharts/redis > values.yaml
 ```
 
 ```console
-helm upgrade --install redis oci://registry-1.docker.io/bitnamicharts/redis -f custom-values.yaml
+helm upgrade --install redis oci://registry-1.docker.io/bitnamicharts/redis -f values.yaml
 ```
 
 ### Post-installation message

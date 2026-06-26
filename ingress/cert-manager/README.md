@@ -51,7 +51,7 @@ helm upgrade --install cert-manager jetstack/cert-manager \
   --namespace cert-manager \
   --create-namespace \
   --version v1.17.1 \
-  -f custom-values.yaml
+  -f values.yaml
 ```
 
 ### Step 4: Verify Installation
@@ -76,7 +76,7 @@ kubectl wait --namespace cert-manager \
 
 ### DNS Resolution Settings
 
-The `custom-values.yaml` configures cert-manager to use public DNS servers for DNS-01 challenge validation:
+The `values.yaml` configures cert-manager to use public DNS servers for DNS-01 challenge validation:
 
 ```yaml
 extraArgs:
@@ -507,7 +507,7 @@ helm repo update
 helm upgrade cert-manager jetstack/cert-manager \
   --namespace cert-manager \
   --version <NEW_VERSION> \
-  -f custom-values.yaml
+  -f values.yaml
 
 # Verify
 kubectl rollout status deployment/cert-manager -n cert-manager
