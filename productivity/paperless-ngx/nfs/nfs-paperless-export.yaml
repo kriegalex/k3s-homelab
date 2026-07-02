@@ -14,6 +14,11 @@ spec:
     path: "/mnt/user/paperless/export"
   mountOptions:
     - nfsvers=4.2
+    - hard
+    - noatime
+    - timeo=600
+    - retrans=2
+    - noresvport
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

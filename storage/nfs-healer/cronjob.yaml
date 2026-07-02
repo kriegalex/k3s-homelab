@@ -1,0 +1,98 @@
+---
+# Auto-healer for Unraid NFS "stale file handle" events.
+#
+# Root cause is fixed server-side (immich/paperless -> cache-only, nextcloud ->
+# array-only, so the mover no longer changes inodes; see
+# claude-docs / plan "Unraid NFS stale file handles"). This CronJob is the
+# defense-in-depth safety net: after events that DO re-issue file handles (an
+# Unraid reboot, array stop/start, or a re-export), a pod's kubelet NFS mount
+# can go stale, and kubelet does NOT remount on container restart — only on pod
+# RECREATION. So the reliable recovery is to delete the affected pod and let its
+# controller recreate it with a fresh mount.
+#
+# Detection is via Kubernetes Events (the signal kubelet actually emits:
+# "stale NFS file handle" on FailedMount / container-spec Failed). A fresh
+# healer pod would mount fresh and never reproduce the app pod's stale handle,
+# so mounting the shares here would NOT work as a probe — the event is the
+# reliable signal. Health-gated: only pods that carry a RECENT stale-handle
+# event AND are currently NOT Ready get deleted, so a healthy pod is never
+# disturbed by a lingering old event.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nfs-healer
+  namespace: nfs-healer
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 120
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: nfs-healer
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+          containers:
+            - name: healer
+              # alpine/k8s = alpine + kubectl + coreutils, reliably on Docker Hub
+              # (bitnami/kubectl was pulled after Broadcom's 2025 deprecation).
+              # POSIX /bin/sh script — no bash/GNU-date dependency. Pin tag to the
+              # cluster's kubectl minor; bump on cluster upgrade.
+              image: alpine/k8s:1.31.6
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  # No `set -e`/`pipefail`: on a healthy sweep `grep` finds no
+                  # stale events and exits 1, which under -e/pipefail would abort
+                  # the script and mark the Job Failed every 5 min. Errors are
+                  # handled explicitly with `|| true` instead. `set -u` only.
+                  #
+                  # No time/recency parse: the health-gate below (act only on a
+                  # pod that is currently NOT Ready) is the real safety mechanism,
+                  # and the ~1h Kubernetes event TTL already bounds how old a
+                  # matched event can be — so an explicit age window is redundant.
+                  set -u
+                  NAMESPACES="immich nextcloud paperless"
+                  NEEDLE="stale NFS file handle"
+
+                  for ns in $NAMESPACES; do
+                    # Pod names (tab-sep field 1) of Pod events whose message
+                    # contains the needle.
+                    kubectl -n "$ns" get events \
+                      --field-selector involvedObject.kind=Pod \
+                      -o go-template='{{range .items}}{{if .message}}{{.involvedObject.name}}{{"\t"}}{{.message}}{{"\n"}}{{end}}{{end}}' \
+                      2>/dev/null \
+                    | grep -F "$NEEDLE" \
+                    | cut -f1 \
+                    | sort -u \
+                    | while IFS= read -r pod; do
+                        [ -z "$pod" ] && continue
+
+                        phase=$(kubectl -n "$ns" get pod "$pod" -o go-template='{{.status.phase}}' 2>/dev/null || true)
+                        if [ -z "$phase" ]; then
+                          echo "skip $ns/$pod: pod already gone"
+                          continue
+                        fi
+                        ready=$(kubectl -n "$ns" get pod "$pod" \
+                          -o go-template='{{range .status.conditions}}{{if eq .type "Ready"}}{{.status}}{{end}}{{end}}' \
+                          2>/dev/null || true)
+                        if [ "$ready" = "True" ]; then
+                          echo "skip $ns/$pod: Ready=True despite stale event"
+                          continue
+                        fi
+
+                        echo "DELETE $ns/$pod: stale NFS handle (phase=$phase ready=${ready:-none})"
+                        kubectl -n "$ns" delete pod "$pod" --wait=false || true
+                      done
+                  done
+                  echo "nfs-healer sweep complete"
+              resources:
+                requests: { cpu: "20m", memory: "48Mi" }
+                limits: { cpu: "200m", memory: "128Mi" }
