@@ -61,6 +61,12 @@ valkey:
               cpu: 200m
               memory: 256Mi
   persistence:
+    # The shared top-level persistence.external (nfs-nextcloud-ro — the read-only
+    # Nextcloud photo library) is merged into every immich component. valkey is
+    # just redis and has no use for it, so disable it here: no point carrying a
+    # pointless NFS mount, and it keeps redis off the NFS stale-handle path.
+    external:
+      enabled: false
     data:
       enabled: true
       size: 1Gi
