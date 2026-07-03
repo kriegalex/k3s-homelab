@@ -88,7 +88,7 @@ helm upgrade --install cnpg cnpg/cloudnative-pg \
   --namespace cnpg-system \
   --create-namespace \
   -f values.yaml \
-  --version 0.23.0
+  --version 0.23.2
 ```
 
 ### Step 3: Verify Installation
@@ -587,7 +587,7 @@ If you're migrating from the k3s-ansible `cloudnative_pg` role:
 | Ansible role deploys operator | Manual Helm install |
 | Variables in `defaults/main.yaml` | Helm values in `values.yaml` |
 | Clusters created via Ansible templates | Manual Cluster CRD application |
-| Chart version: 0.23.0 | Same version, update as needed |
+| Chart version: 0.23.0 | Live version: 0.23.2 |
 
 ### Migration Steps
 
@@ -596,7 +596,8 @@ If you're migrating from the k3s-ansible `cloudnative_pg` role:
    helm upgrade --install cnpg cnpg/cloudnative-pg \
      --namespace cnpg-system \
      --create-namespace \
-     -f values.yaml
+     -f values.yaml \
+     --version 0.23.2
    ```
 
 2. **Existing clusters remain unchanged**: CloudNativePG clusters are CRDs managed by the operator, not by Helm. Your existing PostgreSQL clusters will continue running.
@@ -622,7 +623,7 @@ cloudnative_pg_namespace: cnpg-system
 # k8s-homelab (helm command)
 helm upgrade --install cnpg cnpg/cloudnative-pg \
   --namespace cnpg-system \
-  --version 0.23.0
+  --version 0.23.2
 ```
 
 ## Additional Resources

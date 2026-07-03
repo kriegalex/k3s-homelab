@@ -304,7 +304,11 @@ helm upgrade longhorn longhorn/longhorn \
 
 ---
 
-#### Option B: NFS Provisioner - Shared Network Storage
+#### Option B: NFS Provisioner - Shared Network Storage (Retired 2026-07)
+
+> This provisioner was uninstalled 2026-07 (broken 152 days, zero consumers) and the `nfs-client`
+> StorageClass deleted. Kept below for historical reference only — do not follow these steps without
+> re-evaluating the NFS topology first. Longhorn (Option A) is the only supported dynamic provisioner now.
 
 **What it does:** Automatically provisions PersistentVolumes from an existing NFS server.
 
@@ -1305,7 +1309,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: longhorn  # or nfs-client
+  storageClassName: longhorn
   resources:
     requests:
       storage: 10Gi
@@ -1717,7 +1721,7 @@ For detailed troubleshooting of specific components, see their READMEs:
 
 - **Ingress issues:** [Traefik README](ingress/traefik/README.md)
 - **Certificate issues:** [cert-manager README](ingress/cert-manager/README.md)
-- **Storage issues:** [Longhorn README](storage/longhorn/README.md) or [NFS README](storage/nfs-shares/nfs-client/README.md)
+- **Storage issues:** [Longhorn README](storage/longhorn/README.md)
 - **Database issues:** [CloudNativePG README](database/cloudnative-pg/README.md)
 - **Backup issues:** [k8up README](backup/k8up/README.md)
 - **Monitoring issues:** [Monitoring README](monitoring/README.md)

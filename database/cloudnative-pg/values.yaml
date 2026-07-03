@@ -1,0 +1,7 @@
+image:
+  pullPolicy: IfNotPresent
+  tag: 1.25.2
+
+monitoring:
+  podMonitorAdditionalLabels:
+    release: prometheus

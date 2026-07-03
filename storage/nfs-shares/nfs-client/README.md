@@ -1,5 +1,10 @@
 # NFS Subdir External Provisioner - Dynamic NFS Storage
 
+> **Retired 2026-07.** The `nfs-subdir-external-provisioner` release and the `nfs-client` StorageClass
+> have been removed from the cluster (broken for 152 days, zero PVC/PV consumers). This directory is
+> kept for historical reference only; do not reinstall from it without re-evaluating the NFS topology
+> (see `claude-docs/media-migration-act2.md` and the NFS squash/ownership memory for current NFS conventions).
+
 ## Overview
 
 The NFS Subdir External Provisioner is an automatic provisioner for Kubernetes that uses your existing NFS server to support dynamic provisioning of Kubernetes Persistent Volumes via Persistent Volume Claims. It automatically creates subdirectories on your NFS share for each PVC.

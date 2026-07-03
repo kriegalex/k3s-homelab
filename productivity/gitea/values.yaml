@@ -71,7 +71,9 @@ postgresql:
   global:
     postgresql:
       auth:
-        password: gitea
+        # password set via helm-values-secret.yaml (gitignored):
+        #   helm upgrade --install gitea <chart> -n productivity \
+        #     -f values.yaml -f helm-values-secret.yaml
         database: gitea
         username: gitea
       service:

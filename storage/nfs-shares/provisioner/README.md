@@ -1,5 +1,8 @@
 # NFS Subdirectory External Provisioner Helm Chart
 
+> **Retired 2026-07.** This release has been uninstalled and the `nfs-client` StorageClass deleted
+> (broken for 152 days, zero consumers). Kept for historical reference only.
+
 The [NFS subdir external provisioner](https://github.com/kubernetes-sigs/nfs-subdir-external-provisioner) is an automatic provisioner for Kubernetes that uses your *already configured* NFS server, automatically creating Persistent Volumes.
 
 ## TL;DR;

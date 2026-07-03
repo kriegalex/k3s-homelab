@@ -6,7 +6,7 @@ These are the charts that I use in my homelab. Feel free to inspire yourself fro
 
 This repository contains Helm-based deployment configurations for both infrastructure and applications on Kubernetes.
 
-### Infrastructure Components
+### Infrastructure Components (Deployed)
 
 Core cluster infrastructure for ingress, storage, database, backup, and monitoring:
 
@@ -16,39 +16,47 @@ Core cluster infrastructure for ingress, storage, database, backup, and monitori
 
 - **Storage Layer**
   - [longhorn](storage/longhorn/) - Distributed block storage for Kubernetes
-  - [nfs-client](storage/nfs-shares/nfs-client/) - Dynamic NFS provisioner for shared storage
 
 - **Database Layer**
   - [cloudnative-pg](database/cloudnative-pg/) - PostgreSQL operator for HA database clusters
 
-- **Backup Layer**
-  - [k8up](backup/k8up/) - Backup operator using Restic for PVCs and databases
+- **Backup Layer** - CNPG barman → QNAP S3 (weekly) + Longhorn → S3 (weekly) + [Exoscale SOS rclone mirror](backup/exoscale-s3/); see [claude-docs/backup-strategy.md](claude-docs/backup-strategy.md) for full posture
 
 - **Monitoring Layer**
   - [prometheus](monitoring/) - Prometheus + Grafana stack (kube-prometheus-stack)
+  - [ntfy](monitoring/ntfy/), [alertmanager-ntfy](monitoring/alertmanager-ntfy/) - push notifications for alerts
 
 - **Hardware Layer**
   - [intel-gpu-plugin](hardware/intel-gpu-plugin/) - Intel GPU Device Plugin for hardware transcoding
 
-### Applications
+### Applications (Deployed)
 
 Application deployments organized by category:
 
 - **Media Automation Stack:** [media-automation/](media-automation/)
-  - [radarr](media-automation/radarr/), [sonarr](media-automation/sonarr/), [lidarr](media-automation/lidarr/)
+  - [radarr](media-automation/radarr/), [sonarr](media-automation/sonarr/) (tv + anime instances), [lidarr](media-automation/lidarr/)
   - [prowlarr](media-automation/prowlarr/), [seerr](media-automation/seerr/) (Overseerr fork), [clonarr](media-automation/clonarr/) (TRaSH-Guides sync)
-  - [qbittorrent](media-automation/qbittorrent/), [flaresolverr](media-automation/flaresolverr/)
+  - [qbittorrent](media-automation/qbittorrent/) (media + anime instances), [flaresolverr](media-automation/flaresolverr/)
 - **Game Servers:** [game-servers/](game-servers/)
   - [palworld-server](game-servers/palworld-server/), [satisfactory-server](game-servers/satisfactory-server/)
+  - [enshrouded-server](game-servers/enshrouded-server/), [valheim-server](game-servers/valheim-server/)
 - **Productivity:** [productivity/](productivity/)
   - [nextcloud](productivity/nextcloud/), [paperless-ngx](productivity/paperless-ngx/)
-  - [actual-budget](productivity/actual-budget/), [n8n](productivity/n8n/), [gitea](productivity/gitea/)
+  - [actual-budget](productivity/actual-budget/), [n8n](productivity/n8n/)
 - **Media Services:** [plex](plex/), [jellyfin](jellyfin/), [immich](immich/)
-- **Cache Layer:** [redis](redis/)
-- **Network:** [pihole](pihole/)
+- **Social:** [bluesky-pds](social/bluesky-pds/), [nostr-rs-relay](social/nostr-rs-relay/), [nostr-strfry](social/nostr-strfry/)
+- **Blockchain:** [deltabadger](blockchain/deltabadger/)
 - **Utilities:** [bentopdf](bentopdf/)
-- **Blockchain:** [bitcoin](blockchain/bitcoin/)
-- **Social:** [bluesky-pds](social/bluesky-pds/)
+
+### Available (not currently deployed)
+
+Directories exist in this repo but nothing is running in-cluster for these:
+
+- [k8up](backup/k8up/) - Restic backup operator (superseded by the backup posture above)
+- [pihole](pihole/) - DNS ad-blocking
+- [redis](redis/) - standalone cache layer
+- [gitea](productivity/gitea/) - Git hosting (a separate Gitea runs on a Pi instead)
+- [bitcoin](blockchain/bitcoin/) - Bitcoin node
 
 ## Installation of the cluster
 
@@ -59,10 +67,10 @@ Please have a look at the main [INSTALL.md](./INSTALL.md).
 ### Recommended Installation Order
 
 1. **Ingress:** [cert-manager](ingress/cert-manager/) → [traefik](ingress/traefik/)
-2. **Storage:** [longhorn](storage/longhorn/) and/or [nfs-client](storage/nfs-shares/nfs-client/)
+2. **Storage:** [longhorn](storage/longhorn/)
 3. **Database:** [cloudnative-pg](database/cloudnative-pg/)
 4. **Monitoring:** [prometheus](monitoring/)
-5. **Backup:** [k8up](backup/k8up/)
+5. **Backup:** [Exoscale SOS rclone mirror](backup/exoscale-s3/) (see [claude-docs/backup-strategy.md](claude-docs/backup-strategy.md))
 
 Each infrastructure component has a comprehensive README with:
 - Prerequisites and installation steps

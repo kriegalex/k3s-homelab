@@ -57,7 +57,6 @@ declare -A MANUAL_MAPPINGS=(
     ["plex-media-server"]="plex"
     ["traefik"]="ingress/traefik"
     ["cert-manager"]="ingress/cert-manager"
-    ["nfs-subdir-external-provisioner"]="storage/nfs-shares/provisioner"
     ["longhorn"]="storage/longhorn"
     ["prometheus"]="monitoring"
     ["cnpg"]="database/cloudnative-pg"
