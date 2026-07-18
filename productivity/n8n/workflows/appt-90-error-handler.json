@@ -1,0 +1,84 @@
+{
+  "name": "APPT 90 Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a90e0000-0000-4000-8000-000000000001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ntfy.ntfy.svc.cluster.local/homelab-k3s",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Title",
+              "value": "=n8n error: {{ $json.workflow.name }}"
+            },
+            {
+              "name": "X-Priority",
+              "value": "high"
+            },
+            {
+              "name": "X-Tags",
+              "value": "warning,n8n"
+            },
+            {
+              "name": "X-Click",
+              "value": "={{ $json.execution ? $json.execution.url : 'https://n8n.lourenco.ch' }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "text/plain",
+        "body": "={{ ($json.execution && $json.execution.error ? $json.execution.error.message : ($json.trigger && $json.trigger.error ? $json.trigger.error.message : 'unknown error')) + ' | node: ' + ($json.execution ? $json.execution.lastNodeExecuted : 'trigger') }}",
+        "options": {}
+      },
+      "id": "a90e0000-0000-4000-8000-000000000002",
+      "name": "Notify ntfy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        220,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "r1991uJFaAoF0oK2",
+          "name": "ntfy homelab-publisher"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Notify ntfy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "exportedFrom": "dyFmzyrigVEaC2eG",
+    "instance": "n8n.lourenco.ch"
+  }
+}

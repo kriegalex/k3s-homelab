@@ -1,0 +1,138 @@
+{
+  "name": "APPT 50 Daily digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "a50e0000-0000-4000-8000-000000000001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, source, url, title, rent_gross, rent_net, rooms, m2, commune, fit_score, triage->>'price_tier' AS price_tier FROM listings WHERE first_seen > now() - interval '24 hours' AND status NOT IN ('seeded','dup') ORDER BY fit_score DESC NULLS LAST, first_seen DESC",
+        "options": {}
+      },
+      "id": "a50e0000-0000-4000-8000-000000000002",
+      "name": "Fetch last 24h",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "postgres": {
+          "id": "gZkWl3y38smseXUG",
+          "name": "apartments-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json).filter(r => r && r.id);\nconst esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');\nconst today = $now.toFormat('dd.MM.yyyy');\nconst head = '\\u{1F5DE} <b>Appart Bulle — digest ' + today + '</b>\\n';\nlet text;\nif (!rows.length) {\n  text = head + 'Aucune nouvelle annonce ces dernières 24 h.';\n} else {\n  const tierEmoji = { cheap: '\\u{1F49A}', market: '\\u{1F7E1}', expensive: '\\u{1F534}' };\n  const lines = rows.slice(0, 15).map(r => {\n    const rent = r.rent_gross ?? r.rent_net;\n    const spec = [r.rooms ? r.rooms + 'p' : null, r.m2 ? r.m2 + ' m²' : null, rent ? 'CHF ' + rent : null, r.commune].filter(Boolean).join(' · ');\n    const score = r.fit_score ?? '?';\n    return '• ★' + score + ' ' + (tierEmoji[r.price_tier] || '') + ' <a href=\"' + r.url + '\">' + esc(spec) + '</a> <i>via ' + esc(r.source) + '</i>';\n  });\n  text = head + rows.length + ' nouvelle(s) annonce(s) ces dernières 24 h:\\n' + lines.join('\\n');\n  if (rows.length > 15) text += '\\n… et ' + (rows.length - 15) + ' de plus';\n}\nreturn [{ json: { text } }];"
+      },
+      "id": "a50e0000-0000-4000-8000-000000000003",
+      "name": "Build digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "26794478",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "none",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "a50e0000-0000-4000-8000-000000000004",
+      "name": "TG digest",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        440,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "telegramApi": {
+          "id": "kwXpMbw9DsxxfkAX",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "e44ee75f-2961-4066-b5dd-50cbc1145f2f"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch last 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch last 24h": {
+      "main": [
+        [
+          {
+            "node": "Build digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build digest": {
+      "main": [
+        [
+          {
+            "node": "TG digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "dyFmzyrigVEaC2eG"
+  },
+  "meta": {
+    "exportedFrom": "eST5drpahG1R99B6",
+    "instance": "n8n.lourenco.ch"
+  }
+}

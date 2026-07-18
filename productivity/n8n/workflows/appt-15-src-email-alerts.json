@@ -1,0 +1,205 @@
+{
+  "name": "APPT 15 SRC email-alerts",
+  "nodes": [
+    {
+      "parameters": {
+        "mailbox": "Appart-Bulle",
+        "postProcessAction": "read",
+        "format": "simple",
+        "options": {
+          "forceReconnect": 60
+        }
+      },
+      "id": "a15e0000-0000-4000-8000-000000000001",
+      "name": "Email Trigger (IMAP)",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2.1,
+      "position": [
+        -220,
+        0
+      ],
+      "credentials": {
+        "imap": {
+          "id": "rm1Bokpnq7eUK6K3",
+          "name": "appart-imap (gmail)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Per-portal listing-URL extraction from alert e-mails. Formats are unknown until real\n// alerts arrive: extract every href, unwrap tracking redirects, match portal detail-URL\n// patterns. Anything that yields zero listings is emitted as __unparsed for the ntfy branch.\nconst PORTALS = [\n  { key: 'homegate', from: /homegate/i, pat: [/https?:\\/\\/(?:www\\.)?homegate\\.ch\\/[a-z-]*(?:rent|louer|mieten)[^\\s\"'<>]*?\\/(\\d{6,})/gi] },\n  { key: 'immoscout24', from: /immoscout24|immo-scout/i, pat: [/https?:\\/\\/(?:www\\.)?immoscout24\\.ch\\/[^\\s\"'<>]*?\\/(\\d{6,})/gi, /https?:\\/\\/(?:www\\.)?immoscout24\\.ch\\/(?:en|fr|de)?\\/?d\\/[^\\s\"'<>]*?-(\\d{6,})/gi] },\n  { key: 'newhome', from: /newhome/i, pat: [/https?:\\/\\/(?:www\\.)?newhome\\.ch\\/[^\\s\"'<>]*?\\/(\\d{5,})[^\\s\"'<>]*/gi] },\n  { key: 'comparis', from: /comparis/i, pat: [/https?:\\/\\/(?:en|fr|de|www)\\.comparis\\.ch\\/immobilien\\/[^\\s\"'<>]*?(?:show|details?)\\/(\\d{5,})/gi] },\n  { key: 'petitesannonces', from: /petitesannonces/i, pat: [/https?:\\/\\/(?:www\\.)?petitesannonces\\.ch\\/[^\\s\"'<>]*?[-\\/](\\d{5,})[^\\s\"'<>]*/gi] },\n];\nconst hash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); };\n// n8n's IMAP \"simple\" format decodes bodies as latin-1 regardless of charset → UTF-8\n// bodies arrive as mojibake (pièces→piÃ¨ces, m²→mÂ²). Reverse it when detected.\nconst fixMojibake = s => {\n  if (!/[ÃÂ]./.test(s)) return s;\n  try { return decodeURIComponent(escape(s)); } catch (e) { return s; }\n};\nconst out = [];\n\n// Comparis alerts (verified format 2026-07-18): opaque dispatcher/go?cgid= links (tracking,\n// per-e-mail) + structured text cards. Parse cards from textPlain; source_id = content hash\n// so the same flat in later alert e-mails (new cgid) still dedupes.\nfunction parseComparis(j) {\n  const text = String(j.textPlain ?? '');\n  const items = [];\n  const seenIds = new Set();\n  const blocks = text.split(/<(https:\\/\\/[a-z]{2}\\.comparis\\.ch\\/comparis\\/dispatcher\\/go\\?cgid=[^>]+)>/);\n  for (let i = 1; i < blocks.length; i += 2) {\n    const link = blocks[i];\n    const seg = blocks[i + 1] || '';\n    const lines = seg.split('\\n').map(l => l.trim()).filter(Boolean);\n    if (!lines.length) continue;\n    const title = lines[0];\n    if (/^(contacter|modifier|supprimer|voir|version)/i.test(title) || /^<?https?:/i.test(title)) continue;\n    const rentM = seg.match(/CHF\\s*([\\d']+)/);\n    const addrM = seg.match(/^\\s*(.+?)\\s*\\|\\s*(\\d{4})\\s+([A-Za-zÀ-ž' .-]+?)\\s*$/m);\n    const rmM = seg.match(/(\\d+(?:\\.\\d)?)\\s*pi[eè]ces?\\s*\\|\\s*(\\d+)\\s*m²/i);\n    if (!rentM || !rmM) continue;\n    const rent = rentM ? parseInt(rentM[1].replace(/'/g, ''), 10) : null;\n    const gross = /inkl|compris|charges? incl/i.test(title);\n    const rooms = rmM ? parseFloat(rmM[1]) : null;\n    const addr = addrM ? addrM[1] : null;\n    const commune = addrM ? addrM[3].trim() : null;\n    const id = hash(['comparis', addr, rooms, rent].join('|'));\n    if (seenIds.has(id)) continue;\n    seenIds.add(id);\n    items.push({ json: {\n      source: 'email-comparis',\n      source_id: id,\n      url: link,\n      title: title + (addr ? ' — ' + addr + (commune ? ', ' + commune : '') : ''),\n      rent_net: gross ? null : rent, rent_gross: gross ? rent : null, charges: null,\n      rooms, m2: rmM ? parseInt(rmM[2], 10) : null,\n      commune, address_raw: addr,\n      description: title, cross_key: null,\n      published_at: j.date ? new Date(j.date).toISOString() : null,\n      images: []\n    }});\n  }\n  return items;\n}\n\n// immoscout24 + homegate are SMG portals sharing one alert template (plain text):\n//   <listing link> / \"<commune>, <NPA> <commune>\" / \"<m2> m2\" / \"<rooms> pièces\".\n// They carry NO rent/street and their detail pages are JS-walled (curl_cffi 403), so we\n// don't enrich them — parse the specs + a clickable link; cross_key (commune|rooms|m<m2>)\n// collapses the immoscout/homegate pair to one notification.\nfunction parseSmg(j, portalKey) {\n  const text = String(j.textPlain || '');\n  // match the listing's own spec lines (standalone \"65 m2\" / \"3 pièces\"), NOT the\n  // search-criteria header line \"Bulle, rent, 2.5–3.5 pièces\".\n  const m2m = text.match(/^[ \\t]*(\\d+)[ \\t]*m2[ \\t]*$/m);\n  const rm = text.match(/^[ \\t]*(\\d+(?:[.,]\\d)?)[ \\t]*pi[eè]ces?[ \\t]*$/m);\n  const rooms = rm ? parseFloat(rm[1].replace(',', '.')) : null;\n  const m2 = m2m ? parseInt(m2m[1], 10) : null;\n  const addrM = text.match(/^\\s*([A-Za-zÀ-ÿ'.\\- ]+?),\\s*(\\d{4})\\s+([A-Za-zÀ-ÿ'.\\- ]+?)\\s*$/m);\n  const commune = addrM ? addrM[3].trim() : null;\n  let url = null, id = null;\n  if (portalKey === 'immoscout24') {\n    const um = text.match(/https?:\\/\\/www\\.immoscout24\\.ch\\/louer\\/(\\d+)/);\n    if (um) { id = um[1]; url = 'https://www.immoscout24.ch/louer/' + id; }\n  } else { // homegate: sendgrid-wrapped link, no stable id → hash the specs\n    const um = text.match(/https:\\/\\/[a-z0-9.]*sendgrid\\.net\\/ls\\/click\\?[^\\s\"'<>]+/i);\n    if (um) url = um[0];\n    id = 'h' + hash([commune, rooms, m2].join('|'));\n  }\n  if (!rooms || (!id && !url)) return null;\n  if (!id) id = 'u' + hash(url || '');\n  return [{ json: {\n    source: 'email-' + portalKey,\n    source_id: id,\n    url,\n    title: (rooms ? rooms + ' pièces' : 'Appartement') + (m2 ? ' · ' + m2 + ' m²' : '') +\n           (commune ? ' — ' + commune : '') + ' (' + portalKey + ')',\n    rent_net: null, rent_gross: null, charges: null,\n    rooms, m2, commune, address_raw: null,\n    description: '', cross_key: null,\n    published_at: j.date ? new Date(j.date).toISOString() : null,\n    images: []\n  }}];\n}\nfor (const item of $input.all()) {\n  let j = item.json;\n  const from = String(j.from ?? '');\n  const subject = String(j.subject ?? '(sans sujet)');\n  const bodyHtml = fixMojibake(String(j.textHtml ?? ''));\n  const bodyText = fixMojibake(String(j.textPlain ?? ''));\n  j = { ...j, textHtml: bodyHtml, textPlain: bodyText };\n  const body = bodyHtml || bodyText;\n  const portal = PORTALS.find(p => p.from.test(from)) || PORTALS.find(p => p.from.test(body.slice(0, 2000)));\n  if (portal && portal.key === 'comparis') {\n    const items = parseComparis(j);\n    if (items.length) { out.push(...items); continue; }\n    out.push({ json: { __unparsed: true, from, subject, portal: 'comparis',\n      snippet: (bodyText || bodyHtml).replace(/\\s+/g, ' ').slice(0, 300) } });\n    continue;\n  }\n  if (portal && (portal.key === 'immoscout24' || portal.key === 'homegate')) {\n    const items = parseSmg(j, portal.key);\n    if (items && items.length) { out.push(...items); continue; }\n    out.push({ json: { __unparsed: true, from, subject, portal: portal.key,\n      snippet: (bodyText || bodyHtml).replace(/\\s+/g, ' ').slice(0, 300) } });\n    continue;\n  }\n  // collect candidate URLs: raw hrefs + redirect-unwrapped variants\n  const candidates = new Set();\n  for (const m of body.matchAll(/href=\"([^\"]+)\"/gi)) candidates.add(m[1]);\n  for (const m of body.matchAll(/https?:\\/\\/[^\\s\"'<>]+/gi)) candidates.add(m[0]);\n  for (const c of [...candidates]) {\n    for (const pm of c.matchAll(/[?&](?:url|u|link|redirect|target|dest)=([^&]+)/gi)) {\n      try { candidates.add(decodeURIComponent(pm[1])); } catch (e) { /* skip bad encoding */ }\n    }\n    if (/&amp;/.test(c)) candidates.add(c.replace(/&amp;/g, '&'));\n  }\n  const found = new Map();\n  if (portal) {\n    for (const cand of candidates) {\n      for (const pat of portal.pat) {\n        for (const m of cand.matchAll(pat)) {\n          const id = m[1] || hash(m[0]);\n          if (!found.has(id)) found.set(id, m[0]);\n        }\n      }\n    }\n  }\n  if (!portal || found.size === 0) {\n    out.push({ json: { __unparsed: true, from, subject, portal: portal ? portal.key : 'unknown',\n      snippet: (bodyText || bodyHtml).replace(/\\s+/g, ' ').slice(0, 300) } });\n    continue;\n  }\n  const desc = bodyText.replace(/\\s+/g, ' ').trim().slice(0, 900);\n  for (const [id, url] of found) {\n    out.push({ json: {\n      source: 'email-' + portal.key,\n      source_id: id,\n      url: url.split('?')[0],\n      title: subject + ' (' + portal.key + ')',\n      rent_net: null, rent_gross: null, charges: null, rooms: null, m2: null,\n      commune: null, address_raw: null,\n      description: desc, cross_key: null,\n      published_at: j.date ? new Date(j.date).toISOString() : null,\n      images: []\n    }});\n  }\n}\nreturn out;\n"
+      },
+      "id": "a15e0000-0000-4000-8000-000000000002",
+      "name": "Route & parse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "u1",
+              "leftValue": "={{ $json.__unparsed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a15e0000-0000-4000-8000-000000000003",
+      "name": "Unparsed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ntfy.ntfy.svc.cluster.local/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ topic: 'homelab-appart', title: 'APPT 15: alerte e-mail non parsée (' + ($json.portal || '?') + ')', message: 'From: ' + $json.from + '\\nSujet: ' + $json.subject + '\\n' + ($json.snippet || ''), priority: 2, tags: ['email','warning'] }) }}",
+        "options": {}
+      },
+      "id": "a15e0000-0000-4000-8000-000000000004",
+      "name": "Notify unparsed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        440,
+        -120
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "r1991uJFaAoF0oK2",
+          "name": "ntfy homelab-publisher"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "logic": "removeItemsWithAlreadySeenKeyValues",
+        "dedupeValue": "={{ $json.source + ':' + $json.source_id }}",
+        "options": {}
+      },
+      "id": "a15e0000-0000-4000-8000-000000000005",
+      "name": "Skip already processed",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        440,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "vIOAZw6835Lw6RRg",
+          "mode": "id"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": null
+        },
+        "mode": "each"
+      },
+      "id": "a15e0000-0000-4000-8000-000000000006",
+      "name": "Ingest",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        660,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "Email Trigger (IMAP)": {
+      "main": [
+        [
+          {
+            "node": "Route & parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route & parse": {
+      "main": [
+        [
+          {
+            "node": "Unparsed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unparsed?": {
+      "main": [
+        [
+          {
+            "node": "Notify unparsed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip already processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip already processed": {
+      "main": [
+        [
+          {
+            "node": "Ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "dyFmzyrigVEaC2eG"
+  },
+  "meta": {
+    "exportedFrom": "t8pFNBjIKH0FKvTW",
+    "instance": "n8n.lourenco.ch"
+  }
+}

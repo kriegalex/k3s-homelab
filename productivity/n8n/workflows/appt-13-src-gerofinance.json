@@ -1,0 +1,226 @@
+{
+  "name": "APPT 13 SRC gerofinance",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "2-59/10 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "a13e0000-0000-4000-8000-000000000001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.gerofinance.ch/p3157-alouer.html?type%5B%5D=1&type%5B%5D=2&type%5B%5D=9&type%5B%5D=10&type%5B%5D=12&type%5B%5D=14&type%5B%5D=11&modeAchatOrLocation=location&code_cp=1630",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/json"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "fr-CH,fr"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "a13e0000-0000-4000-8000-000000000002",
+      "name": "Fetch Bulle 1630",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        0,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "https://www.gerofinance.ch/p3157-alouer.html?type%5B%5D=1&type%5B%5D=2&type%5B%5D=9&type%5B%5D=10&type%5B%5D=12&type%5B%5D=14&type%5B%5D=11&modeAchatOrLocation=location&code_cp=1635",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/json"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "fr-CH,fr"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "a13e0000-0000-4000-8000-000000000003",
+      "name": "Fetch La Tour 1635",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        220,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const pages = [];\ntry { pages.push($('Fetch Bulle 1630').first().json.data || ''); } catch (e) { pages.push(''); }\ntry { pages.push($('Fetch La Tour 1635').first().json.data || ''); } catch (e) { pages.push(''); }\n\nconst out = [];\nconst seen = new Set();\nlet markerOk = false;\nconst decode = s => (s || '').replace(/&#(\\d+);/g, (_, c) => String.fromCharCode(c)).replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#x27;|&apos;/g, \"'\").replace(/\\s+/g, ' ').trim();\nfor (const html of pages) {\n  if (typeof html !== 'string' || !html) continue;\n  if (html.includes('bien_search_advanced')) markerOk = true;\n  const blocks = html.split('<article class=\"bien-article').slice(1);\n  for (const b of blocks) {\n    const href = (b.match(/data-href=\"([^\"]+)\"/) || [])[1];\n    if (!href) continue;\n    const id = href.replace(/^\\//, '').split('-').slice(0, 2).join('-');\n    if (seen.has(id)) continue;\n    seen.add(id);\n    const title = decode((b.match(/article-title\"><a[^>]*>([^<]+)</) || ['',''])[1]);\n    const addr = decode((b.match(/article-address\">\\s*([^<]+?)\\s*</) || ['',''])[1]);\n    const rm = (b.match(/class=\"pieces\">\\s*([\\d.,]+)\\s*pi[eè]ce/i) || [])[1];\n    const rooms = rm ? parseFloat(rm.replace(',', '.')) : null;\n    if (rooms === null || rooms < 2.5 || rooms > 3.5) continue;\n    const priceRaw = decode((b.match(/article-price\">\\s*([^<]+)/) || ['',''])[1]);\n    const pm = priceRaw.match(/CHF\\s*([\\d']+)/);\n    const rent = pm ? parseInt(pm[1].replace(/'/g, ''), 10) : null;\n    const img = (b.match(/article-img\"\\s+src=\"([^\"]+)\"/) || [])[1];\n    const m2m = title.match(/(\\d+)\\s*m2/i);\n    out.push({ json: {\n      source: 'gerofinance',\n      source_id: id,\n      url: 'https://www.gerofinance.ch' + href,\n      title: title + (addr ? ' — ' + addr : ''),\n      rent_net: rent, rent_gross: null, charges: null,\n      rooms, m2: m2m ? parseInt(m2m[1], 10) : null,\n      commune: addr || 'Bulle', address_raw: addr || null,\n      description: title, cross_key: null, published_at: null,\n      images: img ? ['https://www.gerofinance.ch' + img] : []\n    }});\n  }\n}\nif (!markerOk) {\n  throw new Error('gerofinance: search-page marker missing on both NPA pages — page structure changed or request blocked');\n}\nreturn out;\n"
+      },
+      "id": "a13e0000-0000-4000-8000-000000000004",
+      "name": "Parse & filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "logic": "removeItemsWithAlreadySeenKeyValues",
+        "dedupeValue": "={{ $json.source_id }}",
+        "options": {}
+      },
+      "id": "a13e0000-0000-4000-8000-000000000005",
+      "name": "Skip already processed",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "vIOAZw6835Lw6RRg",
+          "mode": "id"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": null
+        },
+        "mode": "each"
+      },
+      "id": "a13e0000-0000-4000-8000-000000000006",
+      "name": "Ingest",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        880,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Bulle 1630",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Bulle 1630": {
+      "main": [
+        [
+          {
+            "node": "Fetch La Tour 1635",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch La Tour 1635": {
+      "main": [
+        [
+          {
+            "node": "Parse & filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & filter": {
+      "main": [
+        [
+          {
+            "node": "Skip already processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip already processed": {
+      "main": [
+        [
+          {
+            "node": "Ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "dyFmzyrigVEaC2eG"
+  },
+  "meta": {
+    "exportedFrom": "evlXDSuXHZUZ2uC7",
+    "instance": "n8n.lourenco.ch"
+  }
+}

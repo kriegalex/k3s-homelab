@@ -62,5 +62,15 @@ spec:
       secret:
         name: n8n-db-credentials
 
+  # Extra roles reconciled by the operator (databases are declared via Database CRs,
+  # e.g. apartments-database.yaml)
+  managed:
+    roles:
+      - name: apartments
+        ensure: present
+        login: true
+        passwordSecret:
+          name: apartments-db-credentials
+
   monitoring:
     enablePodMonitor: true

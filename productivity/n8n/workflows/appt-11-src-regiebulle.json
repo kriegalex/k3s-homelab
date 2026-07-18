@@ -1,0 +1,123 @@
+{
+  "name": "APPT 11 SRC regiebulle",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "custom",
+              "cronExpression": "*/10 * * * *"
+            }
+          ]
+        },
+        "feedUrl": "https://www.regiebulle.ch/estate_property/feed/"
+      },
+      "id": "a11e0000-0000-4000-8000-000000000001",
+      "name": "RSS Feed Trigger",
+      "type": "n8n-nodes-base.rssFeedReadTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  const text = `${j.title ?? ''} ${j.contentSnippet ?? ''} ${j.content ?? ''}`;\n  const textNoDomain = text.replace(/regiebulle/gi, '');\n  if (!/\\bbulle\\b/i.test(textNoDomain)) continue;\n  if (!/(2[.,]5|2½|3[.,]5|3½|\\b3\\s*pi[eè]ce)/i.test(text)) continue;\n  if (!/(louer|location|loyer)/i.test(text)) continue;\n  const roomsMatch = text.match(/([23])[.,\\u00BD]?(5|½)?\\s*(?:pi[eè]ces?|pces?)/i) || text.match(/(2[.,]5|2½|3[.,]5|3½)/);\n  let rooms = null;\n  if (roomsMatch) {\n    const raw = roomsMatch[0].replace('½', '.5').replace(',', '.');\n    const num = raw.match(/\\d+\\.?5?/);\n    if (num) rooms = parseFloat(num[0]);\n  }\n  const rentMatch = text.match(/(?:CHF|Fr\\.?)[\\s:]*([\\d'\\u2019\\u00A0 ]{3,10})/i);\n  let rent = null;\n  if (rentMatch) {\n    const v = parseInt(rentMatch[1].replace(/[^\\d]/g, ''), 10);\n    if (v >= 300 && v <= 10000) rent = v;\n  }\n  out.push({ json: {\n    source: 'regiebulle',\n    source_id: String(j.guid || j.link),\n    url: j.link,\n    title: j.title,\n    rooms,\n    rent_gross: rent,\n    commune: 'Bulle',\n    description: String(j.contentSnippet || j.content || '').slice(0, 2000),\n    cross_key: null,\n    published_at: j.isoDate || null\n  }});\n}\nreturn out;"
+      },
+      "id": "a11e0000-0000-4000-8000-000000000002",
+      "name": "Filter & normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "logic": "removeItemsWithAlreadySeenKeyValues",
+        "dedupeValue": "={{ $json.source_id }}",
+        "options": {}
+      },
+      "id": "a11e0000-0000-4000-8000-000000000003",
+      "name": "Skip already processed",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "vIOAZw6835Lw6RRg",
+          "mode": "id"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": null
+        },
+        "mode": "each"
+      },
+      "id": "a11e0000-0000-4000-8000-000000000004",
+      "name": "Ingest",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        660,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "RSS Feed Trigger": {
+      "main": [
+        [
+          {
+            "node": "Filter & normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter & normalize": {
+      "main": [
+        [
+          {
+            "node": "Skip already processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip already processed": {
+      "main": [
+        [
+          {
+            "node": "Ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "dyFmzyrigVEaC2eG"
+  },
+  "meta": {
+    "exportedFrom": "ME0Tk4DIWxICCamO",
+    "instance": "n8n.lourenco.ch"
+  }
+}

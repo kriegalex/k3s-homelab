@@ -1,0 +1,13 @@
+# Declarative database for the apartment-monitor n8n workflows (appart-bulle).
+# Reconciled by CNPG (>=1.25) into the n8n-db cluster; owner role is declared in
+# cnpg-cluster.yaml .spec.managed.roles with credentials from apartments-db-credentials.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: n8n-db-apartments
+  namespace: n8n
+spec:
+  cluster:
+    name: n8n-db
+  name: apartments
+  owner: apartments

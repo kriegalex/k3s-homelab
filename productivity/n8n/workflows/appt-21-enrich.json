@@ -1,0 +1,631 @@
+{
+  "name": "APPT 21 Enrich",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "a21e0000-0000-4000-8000-000000000001",
+      "name": "In",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e1",
+              "leftValue": "={{ $json.source }}",
+              "rightValue": "email-comparis",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a21e0000-0000-4000-8000-000000000002",
+      "name": "Enrichable?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -40,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=http://tls-fetch.n8n.svc.cluster.local:8080/fetch?url={{ encodeURIComponent($json.url) }}",
+        "options": {
+          "timeout": 35000
+        }
+      },
+      "id": "a21e0000-0000-4000-8000-000000000003",
+      "name": "Fetch detail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        180,
+        -140
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// APPT 21 \"Parse detail\" — runs after the tls-fetch HTTP call.\n// Inputs: $json = tls-fetch response {status, final_url, body} (or an error object if the\n// fetch failed under onError:continueRegularOutput). Base listing = the workflow input item.\nconst base = $('In').item.json;\nconst resp = $json || {};\nconst html = typeof resp.body === 'string' ? resp.body : '';\n\n// default: return the listing unchanged (fetch failed / nothing parsed)\nfunction passthrough(reason) {\n  return [{ json: { ...base, _enriched: false, _enrich_note: reason || null } }];\n}\nif (!html || (resp.status && resp.status >= 400)) {\n  return passthrough('fetch ' + (resp.status || 'failed'));\n}\n\n// Comparis detail: extract __NEXT_DATA__ JSON\nif ((base.source || '').startsWith('email-comparis') || /comparis\\.ch/.test(resp.final_url || '')) {\n  const m = html.match(/__NEXT_DATA__\"\\s+type=\"application\\/json\">([\\s\\S]*?)<\\/script>/);\n  if (!m) return passthrough('no __NEXT_DATA__');\n  let pp;\n  try { pp = JSON.parse(m[1]).props.pageProps; } catch (e) { return passthrough('json parse failed'); }\n  const ad = pp.ad || {};\n  const vendor = (pp.contactInformation && pp.contactInformation.VendorInformation) || {};\n\n  const money = v => { if (v == null) return null; const s = String(v).match(/([\\d']+)/); return s ? parseInt(s[1].replace(/'/g, ''), 10) : null; };\n  const priceByKey = k => { const p = (ad.PriceInformation || []).find(x => x.Key === k); return p ? money(p.Value) : null; };\n  const featureOn = keys => (ad.Features || []).some(f => f.Value && keys.includes(f.Key));\n\n  const net = priceByKey('NetRent');\n  const gross = priceByKey('GrossRent') ?? money(ad.PriceText);\n  let charges = priceByKey('Charges') ?? priceByKey('AdditionalCosts');\n  if (charges == null && net != null && gross != null && gross > net) charges = gross - net;\n  const addr = ad.AddressSegments || {};\n  const address_raw = [addr.Street, addr.StreetNumber].filter(Boolean).join(' ') || base.address_raw;\n  const lat = ad.MapData && typeof ad.MapData.GeoPosLat === 'number' ? ad.MapData.GeoPosLat : null;\n  const lng = ad.MapData && typeof ad.MapData.GeoPosLng === 'number' ? ad.MapData.GeoPosLng : null;\n  const features = {\n    balcony: featureOn(['HasBalconies', 'HasTerrace']),\n    elevator: featureOn(['HasLift']),\n    parking: featureOn(['HasParkingIndoor', 'HasParkingOutdoor', 'HasParking']),\n    dishwasher: featureOn(['HasDishwasher']),\n    washingMachine: featureOn(['HasWashingMachine']),\n    pets: featureOn(['PetsAllowed']),\n    minergie: featureOn(['MinergieCertified', 'MinergieCertified_Label']),\n    wheelchair: featureOn(['WheelchairAccessible']),\n  };\n  const images = Array.isArray(ad.ImageUrls) ? ad.ImageUrls.slice(0, 5) : base.images;\n  const agency = vendor.Name || null;\n  const agency_contact = [vendor.VendorContact, vendor.Phone].filter(Boolean).join(' · ') || null;\n\n  return [{ json: {\n    ...base,\n    _enriched: true,\n    _enrich_note: null,\n    url: ad.SharingUrl || base.url,\n    rent_net: net ?? base.rent_net,\n    rent_gross: gross ?? base.rent_gross,\n    charges: charges ?? base.charges,\n    m2: (ad.Area ?? ad.LivingSpace) ? Number(ad.Area ?? ad.LivingSpace) : base.m2,\n    rooms: ad.NumRooms != null ? Number(ad.NumRooms) : base.rooms,\n    commune: addr.City || base.commune,\n    address_raw,\n    floor: ad.Floor != null ? String(ad.Floor) : base.floor,\n    year_built: ad.ConstructionYear ?? base.year_built,\n    description: (ad.Remarks && ad.Remarks.length > (base.description || '').length) ? ad.Remarks : base.description,\n    images,\n    features,\n    lat, lng,\n    agency,\n    agency_contact,\n    partner: ad.PartnerName || null,\n  } }];\n}\n\nreturn passthrough('source not enrichable yet');\n"
+      },
+      "id": "a21e0000-0000-4000-8000-000000000004",
+      "name": "Parse detail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT reputation, note FROM agency_reputation WHERE lower(name) = lower($1) LIMIT 1",
+        "options": {
+          "queryReplacement": "={{ [ $json.agency ?? '' ] }}"
+        }
+      },
+      "id": "a21e0000-0000-4000-8000-000000000005",
+      "name": "Lookup agency",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        620,
+        -140
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "postgres": {
+          "id": "gZkWl3y38smseXUG",
+          "name": "apartments-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const listing = $('Parse detail').item.json;\nconst row = ($json && $json.reputation) ? $json : null;\nlet agency_reputation = null;\nif (row) agency_reputation = row.reputation + (row.note ? ' — ' + row.note : '');\nreturn [{ json: { ...listing, agency_reputation } }];"
+      },
+      "id": "a21e0000-0000-4000-8000-000000000006",
+      "name": "Attach reputation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "i1",
+              "leftValue": "={{ $json.source }}",
+              "rightValue": "email-immoscout24",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "i2",
+              "leftValue": "={{ $json.url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a21e0000-0000-4000-8000-000000000008",
+      "name": "Immo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        180,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT datadome, user_agent, status FROM portal_cookies WHERE portal = 'immoscout24' LIMIT 1",
+        "options": {}
+      },
+      "id": "a21e0000-0000-4000-8000-000000000009",
+      "name": "IS24 load token",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        400,
+        120
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "postgres": {
+          "id": "gZkWl3y38smseXUG",
+          "name": "apartments-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a1",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "active",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "a2",
+              "leftValue": "={{ $json.datadome }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a21e0000-0000-4000-8000-00000000000a",
+      "name": "IS24 active?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        620,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=http://tls-fetch.n8n.svc.cluster.local:8080/fetch?url={{ encodeURIComponent($('Immo?').item.json.url) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-DD-Cookie",
+              "value": "={{ $json.datadome }}"
+            },
+            {
+              "name": "X-DD-UA",
+              "value": "={{ $json.user_agent }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 35000
+        }
+      },
+      "id": "a21e0000-0000-4000-8000-00000000000b",
+      "name": "IS24 fetch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        840,
+        60
+      ],
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// APPT 21 \"IS24 parse\" — enrich an email-immoscout24 listing from its detail page,\n// fetched through tls-fetch WITH the replayed DataDome cookie. Also classifies the\n// result for the circuit breaker (see portal_cookies / tls-fetch README):\n//   200 → enrich + roll the token forward (_dd_new_status='active', _dd_refreshed=new)\n//   403 → cookie dead → _dd_blocked=true, _dd_new_status='expired' (NEVER retried; the\n//         breaker then stops all immoscout fetches until the user re-seeds the token)\n//   other (timeout/5xx) → transient: leave token active, listing un-enriched, no alert.\nconst base = $('Immo?').item.json;\nconst resp = $json || {};\nconst status = Number(resp.status) || 0;\nconst html = typeof resp.body === 'string' ? resp.body : '';\n\nfunction out(extra) {\n  return [{ json: { ...base, _enriched: false, _dd_status: status,\n    _dd_blocked: status === 403,\n    _dd_new_status: status === 403 ? 'expired' : 'active',\n    _dd_refreshed: '',\n    ...extra } }];\n}\n\nif (status !== 200 || !html) return out({ _enrich_note: 'fetch ' + (status || 'failed') });\n\n// live listing data now lives in window.__PINIA_INITIAL_STATE__ (Vue/Pinia)\nconst m = html.match(/window\\.__PINIA_INITIAL_STATE__\\s*=\\s*(\\{[\\s\\S]*?\\})\\s*<\\/script>/);\nif (!m) return out({ _enrich_note: 'no pinia state' });\nlet L;\ntry { L = JSON.parse(m[1]).listing.listing; } catch (e) { return out({ _enrich_note: 'pinia parse failed' }); }\nif (!L) return out({ _enrich_note: 'no listing object' });\n\nconst ch = L.characteristics || {};\nconst addr = L.address || {};\nconst geo = addr.geoCoordinates || {};\nconst rent = (L.prices && L.prices.rent) || {};\n\n// localization: prefer fr, then de/it/en\nconst loc = L.localization || {};\nconst lang = ['fr', 'de', 'it', 'en'].find(k => loc[k] && loc[k].text) || Object.keys(loc)[0];\nconst txt = (loc[lang] && loc[lang].text) || {};\nconst stripHtml = s => String(s || '').replace(/<br\\s*\\/?>/gi, '\\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/[ \\t]+\\n/g, '\\n').trim();\nconst title = txt.title || base.title;\nconst description = stripHtml(txt.description) || base.description;\n\n// images: localization.<lang>.attachments[] type IMAGE\nconst atts = (loc[lang] && Array.isArray(loc[lang].attachments)) ? loc[lang].attachments : [];\nconst images = atts.filter(a => a && a.type === 'IMAGE' && a.url).map(a => a.url).slice(0, 6);\n\n// rent: structured amount if present, else parse the free-text description\nconst money = v => { if (v == null) return null; const s = String(v).match(/(\\d[\\d'\\u2019 ]*)/); return s ? parseInt(s[1].replace(/['\\u2019 ]/g, ''), 10) : null; };\nlet net = money(rent.net && rent.net.amount);\nlet gross = money(rent.gross && rent.gross.amount);\nif (net == null && gross == null && description) {\n  // require an explicit currency marker (CHF / .- / fr) so a bare year like 2026\n  // in an availability date is not misread as the rent.\n  const mm = description.match(/chf\\s*(\\d[\\d'\\u2019 ]{2,})|(\\d[\\d'\\u2019 ]{2,})\\s*(?:\\.-|chf|frs?\\b)/i);\n  const amt = mm ? parseInt((mm[1] || mm[2]).replace(/['\\u2019 ]/g, ''), 10) : null;\n  if (amt && amt > 200 && amt < 20000) {\n    if (/charges?\\s*comprises?|inkl|incl|c\\.?c\\.?/i.test(description)) gross = amt; else net = amt;\n  }\n}\n\nconst lister = L.lister || {};\nconst agency = lister.legalName || (L.listerBranding && L.listerBranding.legalName) || null;\nconst phone = lister.contacts && lister.contacts.inquiry && lister.contacts.inquiry.phone;\nconst street = (addr.street && addr.street !== addr.locality) ? addr.street : base.address_raw;\n\nreturn [{ json: {\n  ...base,\n  _enriched: true,\n  _enrich_note: null,\n  _dd_status: 200,\n  _dd_blocked: false,\n  _dd_new_status: 'active',\n  _dd_refreshed: resp.datadome || '',\n  title,\n  rent_net: net ?? base.rent_net,\n  rent_gross: gross ?? base.rent_gross,\n  rooms: ch.numberOfRooms != null ? Number(ch.numberOfRooms) : base.rooms,\n  m2: ch.livingSpace != null ? Number(ch.livingSpace) : base.m2,\n  commune: addr.locality || base.commune,\n  address_raw: street,\n  description,\n  images: images.length ? images : base.images,\n  lat: typeof geo.latitude === 'number' ? geo.latitude : null,\n  lng: typeof geo.longitude === 'number' ? geo.longitude : null,\n  agency,\n  agency_contact: phone || null,\n} }];\n"
+      },
+      "id": "a21e0000-0000-4000-8000-00000000000c",
+      "name": "IS24 parse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE portal_cookies SET datadome = COALESCE(NULLIF($1, ''), datadome), status = $2, last_ok = CASE WHEN $2 = 'active' THEN now() ELSE last_ok END, last_checked = now(), updated_at = now() WHERE portal = 'immoscout24'",
+        "options": {
+          "queryReplacement": "={{ [ $json._dd_refreshed ?? '', $json._dd_new_status ?? 'active' ] }}"
+        }
+      },
+      "id": "a21e0000-0000-4000-8000-00000000000d",
+      "name": "IS24 write token",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1280,
+        220
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "postgres": {
+          "id": "gZkWl3y38smseXUG",
+          "name": "apartments-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b1",
+              "leftValue": "={{ $json._dd_blocked }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a21e0000-0000-4000-8000-00000000000e",
+      "name": "IS24 blocked?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1280,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ntfy.ntfy.svc.cluster.local/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ topic: 'homelab-appart', title: 'APPT 21: cookie ImmoScout expiré', message: 'Le cookie DataDome immoscout24 est expiré (403). Enrichissement immoscout suspendu jusqu\\u2019à recapture — voir productivity/n8n/tls-fetch/README.md.', priority: 4, tags: ['warning','closed_lock_with_key'] }) }}",
+        "options": {}
+      },
+      "id": "a21e0000-0000-4000-8000-00000000000f",
+      "name": "Notify cookie expired",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1500,
+        380
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "r1991uJFaAoF0oK2",
+          "name": "ntfy homelab-publisher"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT reputation, note FROM agency_reputation WHERE lower(name) = lower($1) LIMIT 1",
+        "options": {
+          "queryReplacement": "={{ [ $('IS24 parse').item.json.agency ?? '' ] }}"
+        }
+      },
+      "id": "a21e0000-0000-4000-8000-000000000010",
+      "name": "IS24 lookup agency",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1280,
+        60
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "postgres": {
+          "id": "gZkWl3y38smseXUG",
+          "name": "apartments-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const listing = $('IS24 parse').item.json;\nconst row = ($json && $json.reputation) ? $json : null;\nlet agency_reputation = null;\nif (row) agency_reputation = row.reputation + (row.note ? ' — ' + row.note : '');\n// strip the internal circuit-breaker fields before emitting downstream\nconst { _dd_status, _dd_blocked, _dd_new_status, _dd_refreshed, ...clean } = listing;\nreturn [{ json: { ...clean, agency_reputation } }];"
+      },
+      "id": "a21e0000-0000-4000-8000-000000000011",
+      "name": "IS24 attach reputation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// cookie inactive/expired → circuit breaker OPEN: make no request, pass the\n// email-sourced listing through un-enriched so it is still notified.\nreturn [{ json: { ...$('Immo?').item.json, _enriched: false, _enrich_note: 'immoscout cookie inactive' } }];"
+      },
+      "id": "a21e0000-0000-4000-8000-000000000012",
+      "name": "IS24 skip",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        260
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "a21e0000-0000-4000-8000-000000000007",
+      "name": "Emit",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "In": {
+      "main": [
+        [
+          {
+            "node": "Enrichable?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrichable?": {
+      "main": [
+        [
+          {
+            "node": "Fetch detail",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Immo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch detail": {
+      "main": [
+        [
+          {
+            "node": "Parse detail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse detail": {
+      "main": [
+        [
+          {
+            "node": "Lookup agency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup agency": {
+      "main": [
+        [
+          {
+            "node": "Attach reputation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach reputation": {
+      "main": [
+        [
+          {
+            "node": "Emit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Immo?": {
+      "main": [
+        [
+          {
+            "node": "IS24 load token",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Emit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IS24 load token": {
+      "main": [
+        [
+          {
+            "node": "IS24 active?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IS24 active?": {
+      "main": [
+        [
+          {
+            "node": "IS24 fetch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IS24 skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IS24 fetch": {
+      "main": [
+        [
+          {
+            "node": "IS24 parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IS24 parse": {
+      "main": [
+        [
+          {
+            "node": "IS24 lookup agency",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IS24 write token",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IS24 blocked?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IS24 lookup agency": {
+      "main": [
+        [
+          {
+            "node": "IS24 attach reputation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IS24 attach reputation": {
+      "main": [
+        [
+          {
+            "node": "Emit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IS24 blocked?": {
+      "main": [
+        [
+          {
+            "node": "Notify cookie expired",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "IS24 skip": {
+      "main": [
+        [
+          {
+            "node": "Emit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "dyFmzyrigVEaC2eG"
+  },
+  "meta": {
+    "exportedFrom": "qfXSCe2gwT4C0UZx",
+    "instance": "n8n.lourenco.ch"
+  }
+}

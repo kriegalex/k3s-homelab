@@ -1,0 +1,660 @@
+{
+  "name": "APPT 20 Ingest",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "a20e0000-0000-4000-8000-000000000001",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO listings (source, source_id, url, title, rent_net, rent_gross, charges, rooms, m2, commune, address_raw, description, cross_key, published_at, images, sources) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb, ARRAY[$1]) ON CONFLICT (source, source_id) DO UPDATE SET last_seen = now(), title = EXCLUDED.title, rent_net = COALESCE(EXCLUDED.rent_net, listings.rent_net), rent_gross = COALESCE(EXCLUDED.rent_gross, listings.rent_gross), cross_key = COALESCE(EXCLUDED.cross_key, listings.cross_key), images = CASE WHEN EXCLUDED.images <> '[]'::jsonb THEN EXCLUDED.images ELSE listings.images END RETURNING (xmax = 0) AS is_new, id, source, source_id, url, title, rent_net, rent_gross, charges, rooms, m2, commune, description, images, cross_key",
+        "options": {
+          "queryReplacement": "={{ [$json.source, $json.source_id, $json.url, $json.title, $json.rent_net ?? null, $json.rent_gross ?? null, $json.charges ?? null, $json.rooms ?? null, $json.m2 ?? null, $json.commune ?? null, $json.address_raw ?? null, $json.description ?? null, $json.cross_key ?? null, $json.published_at ?? null, JSON.stringify($json.images ?? [])] }}"
+        }
+      },
+      "id": "a20e0000-0000-4000-8000-000000000002",
+      "name": "Upsert listing",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "gZkWl3y38smseXUG",
+          "name": "apartments-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.is_new }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a20e0000-0000-4000-8000-000000000003",
+      "name": "Is new?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 500, output_config: { format: { type: 'json_schema', schema: { type: 'object', additionalProperties: false, properties: { price_tier: { type: 'string', enum: ['cheap','market','expensive'] }, condition: { type: 'string', enum: ['old','renovated','modern','new_build','unknown'] }, standard: { type: 'string', enum: ['basic','standard','luxury'] }, eco_label: { type: 'string', enum: ['minergie','minergie_p','minergie_a','minergie_eco','cecb','none'] }, balcony: { type: 'boolean' }, parking: { type: 'boolean' }, elevator: { type: 'boolean' }, pets: { type: 'boolean' }, fit_score: { type: 'integer' }, summary_fr: { type: 'string' }, highlights: { type: 'array', items: { type: 'string' } } }, required: ['price_tier','condition','standard','eco_label','balcony','parking','elevator','pets','fit_score','summary_fr','highlights'] } } }, system: \"Tu tries des annonces de location d'appartement a Bulle (FR, Suisse) pour un locataire. Budget cible loyer CHF 1600-2100/mois charges comprises. Reference marche Bulle: ~CHF 15.8/m2/mois (cantonal), 3.5 pieces typiques CHF 1600-1800. price_tier: compare loyer et CHF/m2 au marche (cheap = nettement sous budget/marche, expensive = au-dessus). condition/eco: deduis du texte francais (renove, cachet, neuf, Minergie, CECB). fit_score 0-100: adequation globale (prix dans budget, nb pieces, etat, localisation Bulle centre). Tiens compte de la regie/agence et de sa reputation si fournie (mauvaise reputation = baisse le fit_score, bonne = augmente). Reponds UNIQUEMENT via le schema, en francais pour summary_fr et highlights.\", messages: [ { role: 'user', content: 'Annonce: ' + ($json.title || '') + ' | loyer_net ' + ($json.rent_net ?? '?') + ' loyer_ttc ' + ($json.rent_gross ?? '?') + ' charges ' + ($json.charges ?? '?') + ' | ' + ($json.rooms ?? '?') + ' pieces | ' + ($json.m2 ?? '?') + ' m2 | etage ' + ($json.floor ?? '?') + ' | annee ' + ($json.year_built ?? '?') + ' | commune ' + ($json.commune || '?') + ' | regie ' + ($json.agency || '?') + ($json.agency_reputation ? ' [reputation: ' + $json.agency_reputation + ']' : '') + ' | equipements ' + (($json.features && Object.keys($json.features).filter(k => $json.features[k]).join(',')) || '?') + ' | ' + ($json.description || '') } ] }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "a20e0000-0000-4000-8000-000000000004",
+      "name": "Triage (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        440,
+        -100
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "anthropicApi": {
+          "id": "lXQiaFOX5YgpyxDz",
+          "name": "Anthropic (apartments)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const listing = $('Enrich').item.json;\nlet triage = null;\ntry {\n  const raw = $json.content && $json.content[0] && $json.content[0].text;\n  if (raw) triage = JSON.parse(raw);\n} catch (e) { triage = null; }\nreturn [{ json: { ...listing, triage, fit_score: triage ? triage.fit_score : null } }];"
+      },
+      "id": "a20e0000-0000-4000-8000-000000000005",
+      "name": "Merge triage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE listings SET triage=$1::jsonb, fit_score=$2, status='triaged', rent_net=COALESCE($4,rent_net), rent_gross=COALESCE($5,rent_gross), charges=COALESCE($6,charges), m2=COALESCE($7,m2), rooms=COALESCE($8,rooms), commune=COALESCE($9,commune), address_raw=COALESCE($10,address_raw), floor=COALESCE($11,floor), year_built=COALESCE($12,year_built), description=COALESCE($13,description), images=CASE WHEN $14::jsonb IS NOT NULL AND $14::jsonb <> '[]'::jsonb THEN $14::jsonb ELSE images END, features=COALESCE($15::jsonb,features), lat=COALESCE($16,lat), lng=COALESCE($17,lng), agency=COALESCE($18,agency), agency_contact=COALESCE($19,agency_contact), partner=COALESCE($20,partner), url=COALESCE($21,url) WHERE id=$3 RETURNING id",
+        "options": {
+          "queryReplacement": "={{ (() => { const l = $json; return [ l.triage ? JSON.stringify(l.triage) : null, l.fit_score ?? null, l.id, l.rent_net ?? null, l.rent_gross ?? null, l.charges ?? null, l.m2 ?? null, l.rooms ?? null, l.commune ?? null, l.address_raw ?? null, l.floor ?? null, l.year_built ?? null, l.description ?? null, l.images ? JSON.stringify(l.images) : null, l.features ? JSON.stringify(l.features) : null, l.lat ?? null, l.lng ?? null, l.agency ?? null, l.agency_contact ?? null, l.partner ?? null, l.url ?? null ]; })() }}"
+        }
+      },
+      "id": "a20e0000-0000-4000-8000-000000000006",
+      "name": "Save triage",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        880,
+        -100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "gZkWl3y38smseXUG",
+          "name": "apartments-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ntfy.ntfy.svc.cluster.local/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => { const l = $('Merge triage').item.json; const t = l.triage; const score = (t && typeof t.fit_score === 'number') ? t.fit_score : 50; const prio = score >= 80 ? 5 : score >= 60 ? 4 : 3; const rent = l.rent_gross ?? l.rent_net; const tags = ['house']; if (t) { tags.push(t.price_tier); if (t.condition && t.condition !== 'unknown') tags.push(t.condition); if (t.eco_label && t.eco_label !== 'none') tags.push(t.eco_label); if (t.balcony) tags.push('balcon'); if (t.parking) tags.push('parking'); } const msgParts = []; msgParts.push((l.rooms ? l.rooms + ' pièces' : '? pièces') + (l.m2 ? ' · ' + l.m2 + ' m²' : '') + (rent ? ' · CHF ' + rent : '') + ' · ' + (l.commune || '')); if (t) { msgParts.push('★ ' + score + '/100 · ' + t.price_tier + ' · ' + t.condition + ' · ' + t.standard); msgParts.push(t.summary_fr); } if (l.agency) msgParts.push('Regie: ' + l.agency + (l.agency_reputation ? ' (' + l.agency_reputation + ')' : '')); msgParts.push('via ' + l.source); return JSON.stringify({ topic: 'homelab-appart', title: (score >= 80 ? '📢 ' : '🏠 ') + l.title, message: msgParts.join('\\n'), click: l.url, priority: prio, tags }); })() }}",
+        "options": {}
+      },
+      "id": "a20e0000-0000-4000-8000-000000000007",
+      "name": "Notify new listing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1100,
+        -100
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "r1991uJFaAoF0oK2",
+          "name": "ntfy homelab-publisher"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "hf1",
+              "leftValue": "={{ $('Merge triage').item.json.fit_score ?? 50 }}",
+              "rightValue": 60,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a20e0000-0000-4000-8000-000000000008",
+      "name": "High fit?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1320,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');\nconst l = $('Merge triage').item.json;\nconst t = l.triage;\nconst score = (t && typeof t.fit_score === 'number') ? t.fit_score : 50;\nconst rent = l.rent_gross ?? l.rent_net;\nconst lines = [];\nlines.push((score >= 80 ? '\\u{1F4E2} ' : '\\u{1F3E0} ') + '<b>' + esc(l.title) + '</b>');\nlines.push((l.rooms ? l.rooms + ' pièces' : '? pièces') + (l.m2 ? ' · ' + l.m2 + ' m²' : '') + (rent ? ' · CHF ' + rent : '') + (l.commune ? ' · ' + esc(l.commune) : ''));\nif (t) {\n  lines.push('★ ' + score + '/100 · ' + esc(t.price_tier) + ' · ' + esc(t.condition) + ' · ' + esc(t.standard));\n  if (t.summary_fr) lines.push(esc(t.summary_fr));\n}\nif (l.agency) lines.push('🏢 ' + esc(l.agency) + (l.agency_reputation ? ' — ' + esc(l.agency_reputation) : ''));\nconst feats = l.features ? Object.entries({balcon:l.features.balcony,ascenseur:l.features.elevator,parking:l.features.parking,'lave-linge':l.features.washingMachine,minergie:l.features.minergie,animaux:l.features.pets}).filter(e => e[1]).map(e => e[0]) : [];\nif (feats.length) lines.push('✓ ' + feats.join(' · '));\nif (l.url) lines.push('<a href=\"' + l.url + '\">Voir l’annonce</a> · via ' + esc(l.source));\nelse lines.push('via ' + esc(l.source));\nconst photo = (Array.isArray(l.images) && l.images.length) ? l.images[0] : null;\nreturn [{ json: { text: lines.join('\\n'), photo } }];"
+      },
+      "id": "a20e0000-0000-4000-8000-000000000009",
+      "name": "Build TG text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "hp1",
+              "leftValue": "={{ $json.photo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a20e0000-0000-4000-8000-00000000000a",
+      "name": "Has photo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1760,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendPhoto",
+        "chatId": "26794478",
+        "binaryData": false,
+        "file": "={{ $json.photo }}",
+        "replyMarkup": "none",
+        "additionalFields": {
+          "caption": "={{ $json.text }}",
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "a20e0000-0000-4000-8000-00000000000b",
+      "name": "TG photo",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1980,
+        -180
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "telegramApi": {
+          "id": "kwXpMbw9DsxxfkAX",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "5e8205b4-aa8a-4222-a3b0-e713b144f690"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "26794478",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "none",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "a20e0000-0000-4000-8000-00000000000c",
+      "name": "TG message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1980,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "telegramApi": {
+          "id": "kwXpMbw9DsxxfkAX",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "8326d2cd-1405-46fd-aed1-e08694cd82a8"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "qfXSCe2gwT4C0UZx",
+          "mode": "id"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": null
+        }
+      },
+      "id": "a20e0000-0000-4000-8000-00000000000e",
+      "name": "Enrich",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        330,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// crossKey(listing) — coarse \"blocking\" fingerprint of a physical apartment, stable across\n// portals despite address-formatting noise. It intentionally does NOT include rent: units in\n// the same building share a key, and the cross-dup QUERY separates them with a rent tolerance\n// (same building, different rent = different unit; same building, ~same rent = same flat on\n// two portals). Returns null when there isn't enough to match on.\nfunction crossKey(l) {\n  const strip = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();\n  const commune = strip(l.commune).replace(/[^a-z0-9]+/g, '');\n  const rooms = (l.rooms != null && !isNaN(l.rooms)) ? Number(l.rooms).toFixed(1) : null;\n  if (!commune || !rooms) return null;\n\n  const STREET = new Set(['rue','route','rte','avenue','av','ave','chemin','ch','impasse','imp',\n    'place','pl','boulevard','bd','allee','quai','sentier','ruelle','esplanade','promenade',\n    'clos','montee','passage','vieux','vieille','grand','grande']);\n  const ART = new Set(['du','de','des','la','le','les','l','d','en','aux','au','sur','a']);\n  const communeSet = new Set(strip(l.commune).split(/[^a-z0-9]+/).filter(Boolean));\n\n  let addr = strip(l.address_raw).replace(/\\b\\d{4}\\b/g, ' '); // drop NPA\n  const tokens = addr.split(/[^a-z0-9]+/).filter(Boolean);\n  const nums = tokens.filter(t => /^\\d{1,3}$/.test(t));\n  const number = nums.length ? nums[nums.length - 1] : null; // house number = last small number\n  const streetToken = tokens.find(t =>\n    /^[a-z]/.test(t) && !STREET.has(t) && !ART.has(t) && !communeSet.has(t)) || null;\n\n  const rent = l.rent_gross ?? l.rent_net;\n  const m2 = (l.m2 != null && !isNaN(l.m2)) ? Math.round(Number(l.m2)) : null;\n  let geo = null;\n  if (streetToken) geo = number ? streetToken + '-n' + number : streetToken;\n  else if (m2) geo = 'm' + m2;              // sparse SMG alerts: no street/rent but have m²\n  else if (rent != null) geo = 'r' + (Math.round(rent / 100) * 100);\n  if (!geo) return null;\n  return commune + '|' + rooms + '|' + geo;\n}\n\nconst l = $json;\nreturn [{ json: { ...l, cross_key: crossKey(l) } }];"
+      },
+      "id": "a20e0000-0000-4000-8000-00000000000f",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, agency, agency_contact, lat, lng, partner, floor, year_built, description, images, features, rent_net, charges FROM listings WHERE cross_key = $1 AND cross_key IS NOT NULL AND id <> $2 AND source <> $3 AND ($4::numeric IS NULL OR rent_gross IS NULL OR abs(rent_gross - $4::numeric) <= 40) AND (notified_at IS NOT NULL OR status IN ('seeded','triaged','notified','dup')) ORDER BY (notified_at IS NULL), first_seen ASC LIMIT 1",
+        "options": {
+          "queryReplacement": "={{ [ $json.cross_key ?? null, $json.id, $json.source, $json.rent_gross ?? null ] }}"
+        }
+      },
+      "id": "a20e0000-0000-4000-8000-000000000010",
+      "name": "Find canonical",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        550,
+        40
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "postgres": {
+          "id": "gZkWl3y38smseXUG",
+          "name": "apartments-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const listing = $('Enrich').item.json;\nconst canon = ($json && $json.id) ? $json : null;\nreturn [{ json: { ...listing, _dup_of: canon ? canon.id : null, _canonical: canon } }];"
+      },
+      "id": "a20e0000-0000-4000-8000-000000000011",
+      "name": "Classify",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        770,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d1",
+              "leftValue": "={{ $json._dup_of }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a20e0000-0000-4000-8000-000000000012",
+      "name": "Is dup?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        990,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH canon AS ( UPDATE listings c SET agency=COALESCE(c.agency,$2), agency_contact=COALESCE(c.agency_contact,$3), lat=COALESCE(c.lat,$4), lng=COALESCE(c.lng,$5), partner=COALESCE(c.partner,$6), floor=COALESCE(c.floor,$7), year_built=COALESCE(c.year_built,$8), description=CASE WHEN length($9) > length(COALESCE(c.description,'')) THEN $9 ELSE c.description END, images=CASE WHEN (c.images IS NULL OR c.images='[]'::jsonb) AND $10::jsonb <> '[]'::jsonb THEN $10::jsonb ELSE c.images END, features=COALESCE(c.features,$11::jsonb), rent_net=COALESCE(c.rent_net,$12), charges=COALESCE(c.charges,$13), sources=(SELECT array_agg(DISTINCT s) FROM unnest(coalesce(c.sources,'{}'::text[]) || $14::text) s), last_seen=now() WHERE c.id=$1 RETURNING c.id) UPDATE listings SET status='dup', dup_of=$1, notified_at=now() WHERE id=$15 RETURNING id",
+        "options": {
+          "queryReplacement": "={{ (() => { const l = $json; return [ l._dup_of, l.agency ?? null, l.agency_contact ?? null, l.lat ?? null, l.lng ?? null, l.partner ?? null, l.floor ?? null, l.year_built ?? null, l.description ?? null, JSON.stringify(l.images ?? []), l.features ? JSON.stringify(l.features) : null, l.rent_net ?? null, l.charges ?? null, l.source, l.id ]; })() }}"
+        }
+      },
+      "id": "a20e0000-0000-4000-8000-000000000013",
+      "name": "Merge into canonical",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1210,
+        160
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "postgres": {
+          "id": "gZkWl3y38smseXUG",
+          "name": "apartments-db"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert listing": {
+      "main": [
+        [
+          {
+            "node": "Is new?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is new?": {
+      "main": [
+        [
+          {
+            "node": "Enrich",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Triage (Claude)": {
+      "main": [
+        [
+          {
+            "node": "Merge triage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge triage": {
+      "main": [
+        [
+          {
+            "node": "Save triage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save triage": {
+      "main": [
+        [
+          {
+            "node": "Notify new listing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify new listing": {
+      "main": [
+        [
+          {
+            "node": "High fit?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "High fit?": {
+      "main": [
+        [
+          {
+            "node": "Build TG text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Build TG text": {
+      "main": [
+        [
+          {
+            "node": "Has photo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has photo?": {
+      "main": [
+        [
+          {
+            "node": "TG photo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TG photo": {
+      "main": [
+        [],
+        [
+          {
+            "node": "TG message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich": {
+      "main": [
+        [
+          {
+            "node": "Find canonical",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Upsert listing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find canonical": {
+      "main": [
+        [
+          {
+            "node": "Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify": {
+      "main": [
+        [
+          {
+            "node": "Is dup?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is dup?": {
+      "main": [
+        [
+          {
+            "node": "Merge into canonical",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Triage (Claude)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "dyFmzyrigVEaC2eG"
+  },
+  "meta": {
+    "exportedFrom": "vIOAZw6835Lw6RRg",
+    "instance": "n8n.lourenco.ch"
+  }
+}

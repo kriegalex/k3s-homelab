@@ -1,6 +1,6 @@
 image:
   repository: n8nio/n8n
-  tag: "1.123.12"  # Pin to specific version for production stability
+  tag: "2.30.7"  # Pin to specific version for production stability
 
 ingress:
   enabled: true
@@ -46,7 +46,7 @@ main:
           size: 10
     
     generic:
-      timezone: "Europe/London"
+      timezone: "Europe/Zurich"
 
   secret:
     n8n:
