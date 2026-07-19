@@ -2,7 +2,7 @@ image:
   registry: ghcr.io
   repository: seerr-team/seerr
   pullPolicy: IfNotPresent
-  tag: v3.2.0
+  tag: v3.3.0
 
 extraEnv:
   - name: LOG_LEVEL

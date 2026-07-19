@@ -31,6 +31,7 @@ OCI chart, no `helm repo add` needed:
 ```bash
 helm upgrade --install seerr \
   oci://ghcr.io/seerr-team/seerr/seerr-chart \
+  --version 3.7.0 \
   -n media \
   -f values.yaml
 ```
@@ -46,7 +47,7 @@ helm show values oci://ghcr.io/seerr-team/seerr/seerr-chart > values.yaml
 
 ## Notes
 
-- Pinned to `v3.2.0`; bump deliberately rather than tracking `latest`.
+- Pinned to `v3.3.0` (chart 3.7.0); bump deliberately rather than tracking `latest`.
 - Chart runs as UID/GID 1000 with `fsGroup: 1000` and
   `fsGroupChangePolicy: OnRootMismatch`, so the existing PVC contents will be
   chowned automatically on first mount.
