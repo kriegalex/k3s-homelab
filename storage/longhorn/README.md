@@ -71,11 +71,11 @@ helm repo update
 helm upgrade --install longhorn longhorn/longhorn \
   --namespace longhorn-system \
   --create-namespace \
-  --version 1.8.1-rc2 \
+  --version 1.11.3 \
   -f values.yaml
 ```
 
-**Chart version note:** This deployment uses Longhorn 1.8.1-rc2. Check [Longhorn releases](https://github.com/longhorn/longhorn/releases) for the latest stable version.
+**Chart version note:** This deployment uses Longhorn 1.11.3 (upgraded 1.8.1 → 1.9.2 → 1.10.2 → 1.11.3 on 2026-07-19; one minor at a time is mandatory). Check [Longhorn releases](https://github.com/longhorn/longhorn/releases) for the latest stable version.
 
 ### Step 3: Verify Installation
 
@@ -356,7 +356,7 @@ Apply the updated configuration:
 ```bash
 helm upgrade longhorn longhorn/longhorn \
   --namespace longhorn-system \
-  --version 1.8.1-rc2 \
+  --version 1.11.3 \
   -f values.yaml
 ```
 
