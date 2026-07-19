@@ -89,7 +89,7 @@
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 500, output_config: { format: { type: 'json_schema', schema: { type: 'object', additionalProperties: false, properties: { price_tier: { type: 'string', enum: ['cheap','market','expensive'] }, condition: { type: 'string', enum: ['old','renovated','modern','new_build','unknown'] }, standard: { type: 'string', enum: ['basic','standard','luxury'] }, eco_label: { type: 'string', enum: ['minergie','minergie_p','minergie_a','minergie_eco','cecb','none'] }, balcony: { type: 'boolean' }, parking: { type: 'boolean' }, elevator: { type: 'boolean' }, pets: { type: 'boolean' }, fit_score: { type: 'integer' }, summary_fr: { type: 'string' }, highlights: { type: 'array', items: { type: 'string' } } }, required: ['price_tier','condition','standard','eco_label','balcony','parking','elevator','pets','fit_score','summary_fr','highlights'] } } }, system: \"Tu tries des annonces de location d'appartement a Bulle (FR, Suisse) pour un locataire. Budget cible loyer CHF 1600-2100/mois charges comprises. Reference marche Bulle: ~CHF 15.8/m2/mois (cantonal), 3.5 pieces typiques CHF 1600-1800. price_tier: compare loyer et CHF/m2 au marche (cheap = nettement sous budget/marche, expensive = au-dessus). condition/eco: deduis du texte francais (renove, cachet, neuf, Minergie, CECB). fit_score 0-100: adequation globale (prix dans budget, nb pieces, etat, localisation Bulle centre). Tiens compte de la regie/agence et de sa reputation si fournie (mauvaise reputation = baisse le fit_score, bonne = augmente). Reponds UNIQUEMENT via le schema, en francais pour summary_fr et highlights.\", messages: [ { role: 'user', content: 'Annonce: ' + ($json.title || '') + ' | loyer_net ' + ($json.rent_net ?? '?') + ' loyer_ttc ' + ($json.rent_gross ?? '?') + ' charges ' + ($json.charges ?? '?') + ' | ' + ($json.rooms ?? '?') + ' pieces | ' + ($json.m2 ?? '?') + ' m2 | etage ' + ($json.floor ?? '?') + ' | annee ' + ($json.year_built ?? '?') + ' | commune ' + ($json.commune || '?') + ' | regie ' + ($json.agency || '?') + ($json.agency_reputation ? ' [reputation: ' + $json.agency_reputation + ']' : '') + ' | equipements ' + (($json.features && Object.keys($json.features).filter(k => $json.features[k]).join(',')) || '?') + ' | ' + ($json.description || '') } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 500, output_config: { format: { type: 'json_schema', schema: { type: 'object', additionalProperties: false, properties: { price_tier: { type: 'string', enum: ['cheap','market','expensive'] }, condition: { type: 'string', enum: ['old','renovated','modern','new_build','unknown'] }, standard: { type: 'string', enum: ['basic','standard','luxury'] }, eco_label: { type: 'string', enum: ['minergie','minergie_p','minergie_a','minergie_eco','cecb','none'] }, cooktop: { type: 'string', enum: ['induction','vitroceramic','other','unknown'] }, parking: { type: 'string', enum: ['yes','no','unknown'] }, balcony: { type: 'boolean' }, elevator: { type: 'boolean' }, pets: { type: 'boolean' }, near_nature: { type: 'boolean' }, near_shops: { type: 'boolean' }, near_transit: { type: 'boolean' }, fit_score: { type: 'integer' }, summary_fr: { type: 'string' }, highlights: { type: 'array', items: { type: 'string' } } }, required: ['price_tier','condition','standard','eco_label','cooktop','parking','balcony','elevator','pets','near_nature','near_shops','near_transit','fit_score','summary_fr','highlights'] } } }, system: \"Tu tries des annonces de location d'appartement a Bulle (FR, Suisse) pour un locataire. Budget cible loyer CHF 1600-2100/mois charges comprises. Reference marche Bulle: ~CHF 15.8/m2/mois (cantonal), 3.5 pieces typiques CHF 1600-1800. price_tier: compare loyer et CHF/m2 au marche (cheap = nettement sous budget/marche, expensive = au-dessus). condition/eco/equipements: deduis du texte francais. fit_score 0-100 = adequation des FONDAMENTAUX uniquement (nb pieces, etat, localisation Bulle centre, reputation de la regie si fournie: mauvaise baisse le score, bonne l'augmente). N'inclus PAS dans fit_score le prix (evalue separement en aval vs le marche des biens comparables) ni les bonus equipements/eco/parking/transports/nature: ils sont ponderes separement en aval. Extrais fidelement: cooktop (induction si plaques a induction, vitroceramic si vitroceramiques, sinon other/unknown); parking ('no' seulement si absence de place explicitement mentionnee, 'yes' si place dispo, sinon 'unknown'); near_nature (calme, verdure, foret, campagne, vue degagee, proche nature); near_shops (commerces/magasins a proximite); near_transit (arret de bus, gare, transports publics a proximite). Reponds UNIQUEMENT via le schema, en francais pour summary_fr et highlights.\", messages: [ { role: 'user', content: 'Annonce: ' + ($json.title || '') + ' | loyer_net ' + ($json.rent_net ?? '?') + ' loyer_ttc ' + ($json.rent_gross ?? '?') + ' charges ' + ($json.charges ?? '?') + ' | ' + ($json.rooms ?? '?') + ' pieces | ' + ($json.m2 ?? '?') + ' m2 | etage ' + ($json.floor ?? '?') + ' | annee ' + ($json.year_built ?? '?') + ' | commune ' + ($json.commune || '?') + ' | regie ' + ($json.agency || '?') + ($json.agency_reputation ? ' [reputation: ' + $json.agency_reputation + ']' : '') + ' | equipements ' + (($json.features && Object.keys($json.features).filter(k => $json.features[k]).join(',')) || '?') + ' | ' + ($json.description || '') } ] }) }}",
         "options": {
           "timeout": 30000
         }
@@ -115,7 +115,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const listing = $('Enrich').item.json;\nlet triage = null;\ntry {\n  const raw = $json.content && $json.content[0] && $json.content[0].text;\n  if (raw) triage = JSON.parse(raw);\n} catch (e) { triage = null; }\nreturn [{ json: { ...listing, triage, fit_score: triage ? triage.fit_score : null } }];"
+        "jsCode": "const listing = $('Enrich').item.json;\nlet triage = null;\ntry {\n  const raw = $json.content && $json.content[0] && $json.content[0].text;\n  if (raw) triage = JSON.parse(raw);\n} catch (e) { triage = null; }\n\n// Deterministic preference weights, applied on top of the LLM's fundamentals-only\n// fit_score so ranking reflects fixed user priorities (edit W to re-tune).\n// The LLM detects the attributes (needs language understanding); the weights live\n// here (predictable, visible via triage.score_adjustments). Kept out of the LLM\n// prompt to avoid double-counting.\nif (triage && typeof triage.fit_score === 'number') {\n  const W = {\n    eco: { minergie_eco: 8, minergie_a: 7, minergie_p: 7, minergie: 5, cecb: 2, none: 0 },\n    induction: 3,\n    noParking: -6,\n    nearNature: 4,\n    nearTransit: 7,\n    nearShops: 2,\n  };\n  const base = triage.fit_score;\n  const adj = [];\n  const eco = W.eco[triage.eco_label] || 0;\n  if (eco) adj.push(['eco:' + triage.eco_label, eco]);\n  if (triage.cooktop === 'induction') adj.push(['induction', W.induction]);\n  if (triage.parking === 'no') adj.push(['sans parking', W.noParking]);\n  if (triage.near_transit) adj.push(['transports', W.nearTransit]);\n  if (triage.near_nature) adj.push(['nature', W.nearNature]);\n  if (triage.near_shops) adj.push(['commerces', W.nearShops]);\n  const delta = adj.reduce((s, a) => s + a[1], 0);\n  triage.fit_score_base = base;\n  triage.fit_score = Math.max(0, Math.min(100, Math.round(base + delta)));\n  triage.score_adjustments = adj.map(a => a[0] + ' ' + (a[1] > 0 ? '+' : '') + a[1]);\n}\n\nreturn [{ json: { ...listing, triage, fit_score: triage ? triage.fit_score : null } }];"
       },
       "id": "a20e0000-0000-4000-8000-000000000005",
       "name": "Merge triage",
@@ -124,6 +124,43 @@
       "position": [
         660,
         -100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH pool AS (\n  SELECT rent_gross::numeric AS rent, m2::numeric AS m2,\n    CASE WHEN lower(coalesce(triage->>'eco_label','none')) LIKE 'minergie%' THEN 'minergie'\n         WHEN lower(coalesce(triage->>'eco_label','none')) = 'cecb' THEN 'cecb'\n         ELSE 'none' END AS eco_class,\n    CASE WHEN lower(coalesce(triage->>'condition','unknown')) IN ('modern','new_build') THEN 'modern'\n         WHEN lower(coalesce(triage->>'condition','unknown')) = 'renovated' THEN 'renovated'\n         WHEN lower(coalesce(triage->>'condition','unknown')) = 'old' THEN 'old'\n         ELSE 'unknown' END AS cond_class\n  FROM listings\n  WHERE status IS DISTINCT FROM 'dup' AND (id <> $2 OR $2 IS NULL)\n    AND rent_gross IS NOT NULL AND m2 IS NOT NULL\n    AND rent_gross BETWEEN 600 AND 6000 AND m2 BETWEEN 15 AND 300\n    AND (rent_gross / m2) BETWEEN 12 AND 42\n    AND first_seen > now() - make_interval(days => $1::int)\n),\ndens AS (\n  SELECT rent, m2, eco_class, cond_class, (rent / m2) * power(m2 / 75.0, 0.45) AS d FROM pool\n),\nseg AS (\n  SELECT d FROM dens\n  WHERE eco_class = (CASE WHEN lower($3) LIKE 'minergie%' THEN 'minergie' WHEN lower($3) = 'cecb' THEN 'cecb' ELSE 'none' END)\n    AND cond_class = (CASE WHEN lower($4) IN ('modern','new_build') THEN 'modern' WHEN lower($4) = 'renovated' THEN 'renovated' WHEN lower($4) = 'old' THEN 'old' ELSE 'unknown' END)\n)\nSELECT\n  (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY d) FROM dens)  AS anchor,\n  (SELECT count(*) FROM dens)                                        AS n_global,\n  (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY m2) FROM dens) AS pool_med_m2,\n  (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY d) FROM seg)   AS seg_median,\n  (SELECT count(*) FROM seg)                                         AS n_seg",
+        "options": {
+          "queryReplacement": "={{ [90, $json.id ?? null, ($json.triage && $json.triage.eco_label) || 'none', ($json.triage && $json.triage.condition) || 'unknown'] }}"
+        }
+      },
+      "id": "a20e0000-0000-4000-8000-00000000000a",
+      "name": "Peer baseline",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        700,
+        80
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "gZkWl3y38smseXUG",
+          "name": "apartments-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Adaptive peer-relative price scoring (design: claude-docs/apartment-price-baseline.md).\n// Reads the LLM+attribute score from Merge triage and the market baseline from Peer baseline,\n// computes an expected rent for THIS flat's class, folds the residual into fit_score, and\n// applies an absolute affordability gate. Degrades to a no-op when data is missing.\nconst l = $('Merge triage').item.json;   // {...listing, triage, fit_score(base+attr weights)}\nconst b = $('Peer baseline').item.json;  // {anchor, n_global, pool_med_m2, seg_median, n_seg}\nconst t = l.triage;\n\nconst PRICE = {\n  BETA: 0.45, REF_M2: 75, DEFAULT_ANCHOR: 23.0, MIN_N: 8,\n  K_SHRINK: 6, K_POINTS: 110, PTS_MIN: -18, PTS_MAX: 25,\n  MULT_MIN: 0.82, MULT_MAX: 1.28,\n  BUDGET_MAX: 2100, HARD_MAX: 2300, GATE_SOFT: 15, GATE_CAP: 45,\n  condPrior: { modern: 1.12, new_build: 1.12, renovated: 1.0, old: 0.94, unknown: 1.0 },\n  ecoPrior: { minergie: 1.04, cecb: 1.01, none: 1.0 },\n};\nconst num = x => { const n = (x === null || x === undefined || x === '') ? NaN : Number(x); return isNaN(n) ? null : n; };\n\nif (t && typeof t.fit_score === 'number') {\n  const rent = num(l.rent_gross) ?? num(l.rent_net);\n  const m2 = num(l.m2);\n  const nGlobal = num(b && b.n_global) || 0;\n  const anchorLive = num(b && b.anchor);\n  const anchor = (nGlobal >= PRICE.MIN_N && anchorLive) ? anchorLive : PRICE.DEFAULT_ANCHOR;\n\n  const ecoKey = (t.eco_label && String(t.eco_label).indexOf('minergie') === 0) ? 'minergie' : (t.eco_label || 'none');\n  const priorRatio = (PRICE.condPrior[t.condition] ?? 1.0) * (PRICE.ecoPrior[ecoKey] ?? 1.0);\n  const nSeg = num(b && b.n_seg) || 0;\n  const segMed = num(b && b.seg_median);\n  let mult = priorRatio;\n  if (nSeg > 0 && segMed && anchor) {\n    const obsRatio = segMed / anchor;\n    mult = (nSeg * obsRatio + PRICE.K_SHRINK * priorRatio) / (nSeg + PRICE.K_SHRINK);\n  }\n  mult = Math.max(PRICE.MULT_MIN, Math.min(PRICE.MULT_MAX, mult));\n\n  let pricePoints = 0, expected = null, residualPct = null, source;\n  if (rent && m2 && anchor) {\n    const sizeAdj = Math.pow(PRICE.REF_M2 / m2, PRICE.BETA);\n    expected = anchor * sizeAdj * mult * m2;\n    residualPct = (expected - rent) / expected;                 // + = cheaper than peers\n    pricePoints = Math.max(PRICE.PTS_MIN, Math.min(PRICE.PTS_MAX, Math.round(residualPct * PRICE.K_POINTS)));\n    source = (nGlobal >= PRICE.MIN_N) ? (nSeg > 0 ? (nSeg >= PRICE.K_SHRINK ? 'data' : 'blend') : 'prior') : 'default-anchor';\n  } else {\n    source = !rent ? 'no-price' : 'no-size';\n  }\n\n  // Reserve the top PTS_MAX points of the 0-100 scale for the price/deal signal: cap the\n  // quality contribution (LLM fundamentals + attribute weights) at 100-PTS_MAX so a fully\n  // equipped listing can't saturate at 100 before price discriminates a bargain from at-market.\n  let score = Math.min(t.fit_score, 100 - PRICE.PTS_MAX) + pricePoints;\n\n  // absolute affordability gate (uses rent alone; applies even when m2 missing)\n  let gateNote = null;\n  if (rent) {\n    if (rent > PRICE.HARD_MAX) { score = Math.min(score, PRICE.GATE_CAP); gateNote = 'hors budget'; }\n    else if (rent > PRICE.BUDGET_MAX) {\n      const over = (rent - PRICE.BUDGET_MAX) / (PRICE.HARD_MAX - PRICE.BUDGET_MAX);\n      score -= Math.round(over * PRICE.GATE_SOFT);\n      gateNote = 'au-dessus budget';\n    }\n  }\n  score = Math.max(0, Math.min(100, Math.round(score)));\n\n  const vsPeers = residualPct === null ? null : Math.round(-residualPct * 1000) / 10;  // <0 = cheaper\n  t.price_anchor = anchor ? Math.round(anchor * 10) / 10 : null;\n  t.price_size_adj = (rent && m2) ? Math.round(Math.pow(PRICE.REF_M2 / m2, PRICE.BETA) * 100) / 100 : null;\n  t.price_seg_mult = Math.round(mult * 1000) / 1000;\n  t.price_n_seg = nSeg;\n  t.price_n_global = nGlobal;\n  t.price_expected = expected ? Math.round(expected) : null;\n  t.price_vs_peers_pct = vsPeers;\n  t.price_points = pricePoints;\n  t.price_source = source;\n\n  if (!Array.isArray(t.score_adjustments)) t.score_adjustments = [];\n  if (pricePoints !== 0 && vsPeers !== null) {\n    t.score_adjustments.push('prix ' + (vsPeers > 0 ? '+' : '') + vsPeers + '% vs pairs ' + (pricePoints > 0 ? '+' : '') + pricePoints);\n  }\n  if (gateNote) t.score_adjustments.push(gateNote);\n  t.fit_score = score;\n}\n\nreturn { json: { ...l, triage: t, fit_score: t ? t.fit_score : (l.fit_score ?? null) } };\n"
+      },
+      "id": "a20e0000-0000-4000-8000-00000000000b",
+      "name": "Price adjust",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        80
       ]
     },
     {
@@ -158,7 +195,7 @@
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
-        "jsonBody": "={{ (() => { const l = $('Merge triage').item.json; const t = l.triage; const score = (t && typeof t.fit_score === 'number') ? t.fit_score : 50; const prio = score >= 80 ? 5 : score >= 60 ? 4 : 3; const rent = l.rent_gross ?? l.rent_net; const tags = ['house']; if (t) { tags.push(t.price_tier); if (t.condition && t.condition !== 'unknown') tags.push(t.condition); if (t.eco_label && t.eco_label !== 'none') tags.push(t.eco_label); if (t.balcony) tags.push('balcon'); if (t.parking) tags.push('parking'); } const msgParts = []; msgParts.push((l.rooms ? l.rooms + ' pièces' : '? pièces') + (l.m2 ? ' · ' + l.m2 + ' m²' : '') + (rent ? ' · CHF ' + rent : '') + ' · ' + (l.commune || '')); if (t) { msgParts.push('★ ' + score + '/100 · ' + t.price_tier + ' · ' + t.condition + ' · ' + t.standard); msgParts.push(t.summary_fr); } if (l.agency) msgParts.push('Regie: ' + l.agency + (l.agency_reputation ? ' (' + l.agency_reputation + ')' : '')); msgParts.push('via ' + l.source); return JSON.stringify({ topic: 'homelab-appart', title: (score >= 80 ? '📢 ' : '🏠 ') + l.title, message: msgParts.join('\\n'), click: l.url, priority: prio, tags }); })() }}",
+        "jsonBody": "={{ (() => { const l = $('Price adjust').item.json; const t = l.triage; const score = (t && typeof t.fit_score === 'number') ? t.fit_score : 50; const prio = score >= 80 ? 5 : score >= 60 ? 4 : 3; const rent = l.rent_gross ?? l.rent_net; const tags = ['house']; if (t) { tags.push(t.price_tier); if (t.condition && t.condition !== 'unknown') tags.push(t.condition); if (t.eco_label && t.eco_label !== 'none') tags.push(t.eco_label); if (t.balcony) tags.push('balcon'); if (t.parking) tags.push('parking'); } const msgParts = []; msgParts.push((l.rooms ? l.rooms + ' pièces' : '? pièces') + (l.m2 ? ' · ' + l.m2 + ' m²' : '') + (rent ? ' · CHF ' + rent : '') + ' · ' + (l.commune || '')); if (t) { msgParts.push('★ ' + score + '/100 · ' + t.price_tier + ' · ' + t.condition + ' · ' + t.standard); msgParts.push(t.summary_fr); if (t.price_expected) msgParts.push('attendu ~' + t.price_expected + ' (' + (t.price_vs_peers_pct > 0 ? '+' : '') + t.price_vs_peers_pct + '% vs pairs)'); } if (l.agency) msgParts.push('Regie: ' + l.agency + (l.agency_reputation ? ' (' + l.agency_reputation + ')' : '')); msgParts.push('via ' + l.source); return JSON.stringify({ topic: 'homelab-appart', title: (score >= 80 ? '📢 ' : '🏠 ') + l.title, message: msgParts.join('\\n'), click: l.url, priority: prio, tags }); })() }}",
         "options": {}
       },
       "id": "a20e0000-0000-4000-8000-000000000007",
@@ -188,7 +225,7 @@
           "conditions": [
             {
               "id": "hf1",
-              "leftValue": "={{ $('Merge triage').item.json.fit_score ?? 50 }}",
+              "leftValue": "={{ $('Price adjust').item.json.fit_score ?? 50 }}",
               "rightValue": 60,
               "operator": {
                 "type": "number",
@@ -211,7 +248,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');\nconst l = $('Merge triage').item.json;\nconst t = l.triage;\nconst score = (t && typeof t.fit_score === 'number') ? t.fit_score : 50;\nconst rent = l.rent_gross ?? l.rent_net;\nconst lines = [];\nlines.push((score >= 80 ? '\\u{1F4E2} ' : '\\u{1F3E0} ') + '<b>' + esc(l.title) + '</b>');\nlines.push((l.rooms ? l.rooms + ' pièces' : '? pièces') + (l.m2 ? ' · ' + l.m2 + ' m²' : '') + (rent ? ' · CHF ' + rent : '') + (l.commune ? ' · ' + esc(l.commune) : ''));\nif (t) {\n  lines.push('★ ' + score + '/100 · ' + esc(t.price_tier) + ' · ' + esc(t.condition) + ' · ' + esc(t.standard));\n  if (t.summary_fr) lines.push(esc(t.summary_fr));\n}\nif (l.agency) lines.push('🏢 ' + esc(l.agency) + (l.agency_reputation ? ' — ' + esc(l.agency_reputation) : ''));\nconst feats = l.features ? Object.entries({balcon:l.features.balcony,ascenseur:l.features.elevator,parking:l.features.parking,'lave-linge':l.features.washingMachine,minergie:l.features.minergie,animaux:l.features.pets}).filter(e => e[1]).map(e => e[0]) : [];\nif (feats.length) lines.push('✓ ' + feats.join(' · '));\nif (l.url) lines.push('<a href=\"' + l.url + '\">Voir l’annonce</a> · via ' + esc(l.source));\nelse lines.push('via ' + esc(l.source));\nconst photo = (Array.isArray(l.images) && l.images.length) ? l.images[0] : null;\nreturn [{ json: { text: lines.join('\\n'), photo } }];"
+        "jsCode": "const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');\nconst l = $('Price adjust').item.json;\nconst t = l.triage;\nconst score = (t && typeof t.fit_score === 'number') ? t.fit_score : 50;\nconst rent = l.rent_gross ?? l.rent_net;\nconst lines = [];\nlines.push((score >= 80 ? '\\u{1F4E2} ' : '\\u{1F3E0} ') + '<b>' + esc(l.title) + '</b>');\nlines.push((l.rooms ? l.rooms + ' pièces' : '? pièces') + (l.m2 ? ' · ' + l.m2 + ' m²' : '') + (rent ? ' · CHF ' + rent : '') + (l.commune ? ' · ' + esc(l.commune) : ''));\nif (t) {\n  const base = (typeof t.fit_score_base === 'number') ? t.fit_score_base : score;\n  const scoreStr = (base !== score) ? (score + '/100 (base ' + base + ')') : (score + '/100');\n  lines.push('★ ' + scoreStr + ' · ' + esc(t.price_tier) + ' · ' + esc(t.condition) + ' · ' + esc(t.standard));\n  if (t.price_expected) lines.push('💰 attendu ~' + t.price_expected + ' · ' + (t.price_vs_peers_pct > 0 ? '+' : '') + t.price_vs_peers_pct + '% vs pairs' + (t.price_n_seg ? ' (n' + t.price_n_seg + ')' : ''));\n  if (t.summary_fr) lines.push(esc(t.summary_fr));\n  const tags = [];\n  if (t.eco_label && t.eco_label !== 'none') tags.push('🌿 ' + esc(t.eco_label));\n  if (t.cooktop === 'induction') tags.push('🔥 induction');\n  if (t.near_transit) tags.push('🚆 transports');\n  if (t.near_nature) tags.push('🌳 nature');\n  if (t.near_shops) tags.push('🛒 commerces');\n  if (t.parking === 'no') tags.push('🚫 sans parking');\n  if (tags.length) lines.push(tags.join(' · '));\n  if (Array.isArray(t.score_adjustments) && t.score_adjustments.length) lines.push('⚖️ ' + esc(t.score_adjustments.join(', ')));\n}\nif (l.agency) lines.push('🏢 ' + esc(l.agency) + (l.agency_reputation ? ' — ' + esc(l.agency_reputation) : ''));\nconst feats = l.features ? Object.entries({balcon:l.features.balcony,ascenseur:l.features.elevator,parking:l.features.parking,'lave-linge':l.features.washingMachine,minergie:l.features.minergie,animaux:l.features.pets}).filter(e => e[1]).map(e => e[0]) : [];\nif (feats.length) lines.push('✓ ' + feats.join(' · '));\nif (l.url) lines.push('<a href=\"' + l.url + '\">Voir l’annonce</a> · via ' + esc(l.source));\nelse lines.push('via ' + esc(l.source));\nconst photo = (Array.isArray(l.images) && l.images.length) ? l.images[0] : null;\nreturn [{ json: { text: lines.join('\\n'), photo } }];"
       },
       "id": "a20e0000-0000-4000-8000-000000000009",
       "name": "Build TG text",
@@ -504,7 +541,7 @@
       "main": [
         [
           {
-            "node": "Save triage",
+            "node": "Peer baseline",
             "type": "main",
             "index": 0
           }
@@ -642,6 +679,28 @@
         [
           {
             "node": "Triage (Claude)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Peer baseline": {
+      "main": [
+        [
+          {
+            "node": "Price adjust",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Price adjust": {
+      "main": [
+        [
+          {
+            "node": "Save triage",
             "type": "main",
             "index": 0
           }
