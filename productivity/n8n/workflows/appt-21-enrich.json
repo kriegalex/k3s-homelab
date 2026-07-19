@@ -330,7 +330,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ topic: 'homelab-appart', title: 'APPT 21: cookie ' + ($('SMG parse').item.json._portal || 'SMG') + ' expiré', message: 'Le cookie DataDome ' + ($('SMG parse').item.json._portal || 'SMG') + ' est expiré (403). Enrichissement suspendu pour ce portail jusqu\\u2019à recapture — voir productivity/n8n/tls-fetch/README.md.', priority: 4, tags: ['warning','closed_lock_with_key'] }) }}",
+        "jsonBody": "={{ JSON.stringify({ topic: 'homelab-appart', title: 'APPT 21: cookie ' + ($('SMG parse').item.json._portal || 'SMG') + ' expiré', message: 'Le cookie DataDome ' + ($('SMG parse').item.json._portal || 'SMG') + ' est expiré (403). Enrichissement ET notifications suspendus pour ce portail — les annonces arrivantes sont mises en attente (status pending_enrich). Après recapture du cookie (productivity/n8n/workflows/README.md), ouvrir « APPT 22 Replay pending » et cliquer Execute workflow pour rejouer les annonces en attente.', priority: 4, tags: ['warning','closed_lock_with_key'] }) }}",
         "options": {}
       },
       "id": "f0aa8957-3370-4dbd-90c7-507d8d7a9788",
@@ -412,7 +412,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// The parent Execute-Workflow node receives the LAST executed node's data, and on\n// the blocked path that was the ntfy response — which then poisoned APPT 20's\n// triage/scoring (2026-07-19: Peer baseline died on the ntfy message id). Hand the\n// un-enriched listing back so the alert never becomes the workflow output.\nreturn [{ json: { ...$('SMG parse').item.json, _enrich_note: 'SMG cookie expired (403)' } }];"
+        "jsCode": "// The parent Execute-Workflow node receives the LAST executed node's data, and on\n// the blocked path that was the ntfy response — which then poisoned APPT 20's\n// triage/scoring (2026-07-19: Peer baseline died on the ntfy message id). Hand the\n// un-enriched listing back (internal _dd_*/_portal fields stripped) so APPT 20's\n// 'Enrich held?' gate parks it as pending_enrich instead of notifying it.\nconst { _dd_status, _dd_blocked, _dd_new_status, _dd_refreshed, _portal, ...clean } = $('SMG parse').item.json;\nreturn [{ json: { ...clean, _enrich_note: 'SMG cookie expired (403)' } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,

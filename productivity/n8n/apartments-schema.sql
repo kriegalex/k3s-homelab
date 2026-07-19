@@ -32,6 +32,11 @@ CREATE TABLE IF NOT EXISTS listings (
     cross_key    text,
     triage       jsonb,
     fit_score    integer,
+    -- status lifecycle: 'new' → 'triaged' (scored+notified) | 'dup' (cross-portal
+    -- duplicate, merged into dup_of) | 'seeded' (backfill, never notified) |
+    -- 'pending_enrich' (SMG listing parked while the portal's DataDome cookie is
+    -- expired — NOT triaged/notified; APPT 22 Replay re-runs it through APPT 20
+    -- once the cookie is re-seeded, and only then does the notification fire)
     status       text DEFAULT 'new',
     published_at timestamptz,
     first_seen   timestamptz NOT NULL DEFAULT now(),
@@ -89,6 +94,10 @@ CREATE INDEX IF NOT EXISTS agency_reputation_lname ON agency_reputation (lower(n
 --   * expiry is detected from ORGANIC enrich traffic (no standalone high-frequency
 --     liveness probe, which would itself emit repeated 403s). A fresh token, pasted
 --     by the user, resets status='active' and resumes traffic.
+--   * while expired, APPT 20 parks that portal's listings as
+--     listings.status='pending_enrich' (no triage, no notification); after the
+--     re-seed, run "APPT 22 Replay pending" (manual Execute workflow) to enrich,
+--     triage and notify them.
 -- NEVER commit real token values — rows are populated/rotated at runtime only.
 -- See tls-fetch/README.md.
 -- ---------------------------------------------------------------------------

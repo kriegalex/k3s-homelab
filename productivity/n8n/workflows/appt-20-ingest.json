@@ -17,7 +17,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO listings (source, source_id, url, title, rent_net, rent_gross, charges, rooms, m2, commune, address_raw, description, cross_key, published_at, images, sources) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb, ARRAY[$1]) ON CONFLICT (source, source_id) DO UPDATE SET last_seen = now(), title = EXCLUDED.title, rent_net = COALESCE(EXCLUDED.rent_net, listings.rent_net), rent_gross = COALESCE(EXCLUDED.rent_gross, listings.rent_gross), cross_key = COALESCE(EXCLUDED.cross_key, listings.cross_key), images = CASE WHEN EXCLUDED.images <> '[]'::jsonb THEN EXCLUDED.images ELSE listings.images END RETURNING (xmax = 0) AS is_new, id, source, source_id, url, title, rent_net, rent_gross, charges, rooms, m2, commune, description, images, cross_key",
+        "query": "INSERT INTO listings (source, source_id, url, title, rent_net, rent_gross, charges, rooms, m2, commune, address_raw, description, cross_key, published_at, images, sources) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb, ARRAY[$1]) ON CONFLICT (source, source_id) DO UPDATE SET last_seen = now(), title = EXCLUDED.title, rent_net = COALESCE(EXCLUDED.rent_net, listings.rent_net), rent_gross = COALESCE(EXCLUDED.rent_gross, listings.rent_gross), cross_key = COALESCE(EXCLUDED.cross_key, listings.cross_key), images = CASE WHEN EXCLUDED.images <> '[]'::jsonb THEN EXCLUDED.images ELSE listings.images END RETURNING (xmax = 0) AS is_new, id, source, source_id, url, title, rent_net, rent_gross, charges, rooms, m2, commune, description, images, cross_key, status",
         "options": {
           "queryReplacement": "={{ [$json.source, $json.source_id, $json.url, $json.title, $json.rent_net ?? null, $json.rent_gross ?? null, $json.charges ?? null, $json.rooms ?? null, $json.m2 ?? null, $json.commune ?? null, $json.address_raw ?? null, $json.description ?? null, $json.cross_key ?? null, $json.published_at ?? null, JSON.stringify($json.images ?? [])] }}"
         }
@@ -49,7 +49,7 @@
           "conditions": [
             {
               "id": "c1",
-              "leftValue": "={{ $json.is_new }}",
+              "leftValue": "={{ $json.is_new || $json.status === 'pending_enrich' }}",
               "rightValue": "",
               "operator": {
                 "type": "boolean",
@@ -489,6 +489,63 @@
           "name": "apartments-db"
         }
       }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "h1",
+              "leftValue": "={{ String($json._enrich_note ?? '').startsWith('SMG cookie') }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "enrich-held-if-00000001",
+      "name": "Enrich held?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1180,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE listings SET status='pending_enrich', last_seen=now() WHERE id=$1 RETURNING id, status",
+        "options": {
+          "queryReplacement": "={{ [ $json.id ] }}"
+        }
+      },
+      "id": "mark-pending-00000001",
+      "name": "Mark pending",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1400,
+        -40
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "gZkWl3y38smseXUG",
+          "name": "apartments-db"
+        }
+      }
     }
   ],
   "connections": {
@@ -627,7 +684,7 @@
       "main": [
         [
           {
-            "node": "Find canonical",
+            "node": "Enrich held?",
             "type": "main",
             "index": 0
           }
@@ -706,11 +763,30 @@
           }
         ]
       ]
+    },
+    "Enrich held?": {
+      "main": [
+        [
+          {
+            "node": "Mark pending",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Find canonical",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1",
-    "errorWorkflow": "dyFmzyrigVEaC2eG"
+    "errorWorkflow": "dyFmzyrigVEaC2eG",
+    "binaryMode": "separate"
   },
   "meta": {
     "exportedFrom": "vIOAZw6835Lw6RRg",

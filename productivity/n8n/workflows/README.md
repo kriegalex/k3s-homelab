@@ -14,8 +14,9 @@ Helm charts.
 | `appt-15-src-email-alerts.json` | Portal alert e-mails (homegate/immoscout24/newhome/Comparis/petitesannonces) via Gmail IMAP, label `Appart-Bulle` | IMAP trigger (instant) |
 | `appt-20-ingest.json` | Normalize (cross_key) → upsert → enrich (APPT 21) → cross-portal dedup → LLM triage → ntfy + Telegram (fit ≥ 60, photo) | called by sources |
 | &nbsp;&nbsp;↳ triage scoring | Haiku scores `fit_score` on **fundamentals only** (rooms, condition, Bulle-centre location, régie reputation — **no price**) + extracts attributes; `Merge triage` applies **deterministic preference weights** (eco/Minergie, induction, no-parking, transit/nature/shops, `W` table) on top; then **`Peer baseline`** (Postgres) computes a **size-normalized market anchor + segment median** over recent canonical listings, and **`Price adjust`** folds a **peer-relative price residual** (expected rent for this flat's class, size-corrected `m²^-0.45`, seeded segment priors that shrink toward observed data) + an **absolute affordability gate** into `fit_score`. Keeps `fit_score_base`, `score_adjustments`, and audit `price_*` fields. Tune the `PRICE` block in `Price adjust` / the `W` table in `Merge triage`. Design + calibration: `claude-docs/apartment-price-baseline.md`. | — |
-| `appt-21-enrich.json` | For `email-*` listings: fetch the detail page via `tls-fetch` (curl_cffi), backfill description/amenities/floor/GPS/images/agency, join `agency_reputation`. Comparis via `__NEXT_DATA__`; immoscout24/homegate (SMG) via replayed DataDome cookie from `portal_cookies` with a circuit breaker (expired token → zero fetches + ntfy) | called by APPT 20 |
-| `appt-50-daily-digest.json` | 08:00 Telegram digest of last-24 h listings + DataDome cookie-health footer (token status & age per portal) | cron `0 8 * * *` |
+| `appt-21-enrich.json` | For `email-*` listings: fetch the detail page via `tls-fetch` (curl_cffi), backfill description/amenities/floor/GPS/images/agency, join `agency_reputation`. Comparis via `__NEXT_DATA__`; immoscout24/homegate (SMG) via replayed DataDome cookie from `portal_cookies` with a circuit breaker (expired token → zero fetches + one ntfy alert) | called by APPT 20 |
+| `appt-22-replay-pending.json` | **Replay held listings after a cookie re-seed**: selects `status='pending_enrich'` rows whose portal cookie is `active` again, re-runs each through APPT 20 (enrich → triage → notify), then sends a ntfy summary (replayed / still-pending counts). Run it by opening the workflow and clicking **Execute workflow** — it has only a Manual Trigger and never runs on its own | manual |
+| `appt-50-daily-digest.json` | 08:00 Telegram digest of last-24 h listings + DataDome cookie-health footer (token status & age per portal, plus `⏸ N annonce(s) en attente` when listings are held) | cron `0 8 * * *` |
 | `appt-90-error-handler.json` | Error workflow → ntfy `homelab-k3s` | Error Trigger |
 | `appt-99-test-inject.json` | Auth-protected test webhook `/webhook/appart-inject` | Webhook |
 
@@ -44,8 +45,10 @@ SMG portals gate live pages with DataDome; APPT 21 enriches them by replaying a 
 but dies on a home-IP change, long idle, or a behavioural flag. When it expires the circuit
 breaker flips the row to `status='expired'`, fires one ntfy alert, and **stops all fetches
 for that portal** (deliberately — see `tls-fetch/README.md`); the APPT 50 digest footer then
-shows 🔴 EXPIRÉ. To resume, capture a fresh cookie from a real browser on the **home network**
-and write it back:
+shows 🔴 EXPIRÉ. While expired, incoming listings from that portal are **parked**
+(`listings.status='pending_enrich'`) instead of being triaged/notified — the notification
+only fires after a successful replay, on full data. To resume, capture a fresh cookie from a
+real browser on the **home network** and write it back:
 
 1. Open `https://www.immoscout24.ch` (or `https://www.homegate.ch`) and let the page fully
    load (solve the captcha if shown).
@@ -60,6 +63,11 @@ and write it back:
       status='active', last_ok=now(), last_checked=now(), updated_at=now() \
       WHERE portal='immoscout24';"
    ```
+
+4. Open **APPT 22 Replay pending** in the n8n editor and click **Execute workflow**. It
+   replays every parked listing through the full pipeline (enrich → triage → ntfy/Telegram)
+   and posts a ntfy summary (`N rejouée(s) / M toujours en attente`). Listings for a portal
+   whose cookie is still expired stay parked and are picked up by the next replay run.
 
 The next morning's digest footer should read ✅ with a fresh age. Never commit token values —
 `portal_cookies` lives in the DB only.
