@@ -1,25 +1,26 @@
-# alertmanager-ntfy bridge — chart: k8s-charts/alertmanager-ntfy v0.2.0
+# alertmanager-ntfy bridge — chart: k8s-charts/alertmanager-ntfy v0.3.0
 # (AGPL-3.0 fork of xenrox/ntfy-alertmanager's contrib chart — see
 #  https://github.com/kriegalex/k8s-charts/tree/main/charts/alertmanager-ntfy)
 #
 # Receives Alertmanager webhooks, formats them, POSTs to a ntfy topic.
-# Only fields that differ from upstream defaults are listed here; run:
-#   helm show values k8s-charts/alertmanager-ntfy --version 0.2.0
-# for the full effective config.
 #
-# IMPORTANT: ntfy credentials live in a separate gitignored values file
-# (`helm-values-secret.yaml` in this folder — template in secrets-template.yaml)
-# because the chart renders them directly into a Secret from .Values
-# (no envFrom path is exposed). Install with both files:
+# IMPORTANT — how config + credentials work since chart 0.3.0:
+# `existingSecret` points the deployment at the manually created Secret
+# `alertmanager-ntfy-config` (keys: `config` = full rendered scfg file,
+# `template.tmpl`). With it set, the chart renders NO Secret and ignores
+# every other `ntfyAlertmanager.*` value — the block below is kept as the
+# committed SOURCE for regenerating that config (credentials excluded).
+# To change any bridge setting: edit below, then regenerate + reapply the
+# Secret and restart the pod (see secrets-template.yaml for the procedure).
 #
 #   helm repo add k8s-charts https://kriegalex.github.io/k8s-charts/   # one-time
 #   helm repo update
 #   kubectl create namespace ntfy   # shared with the ntfy server
 #   helm upgrade --install alertmanager-ntfy k8s-charts/alertmanager-ntfy \
-#     --version 0.2.0 -n ntfy \
-#     -f values.yaml -f helm-values-secret.yaml
+#     --version 0.3.0 -n ntfy -f values.yaml
 
 ntfyAlertmanager:
+  existingSecret: alertmanager-ntfy-config
   # Multi mode: one ntfy push per Alertmanager group, regardless of how
   # many alerts are in the group. Critical for storms like multiple
   # Longhorn volumes failing at once — group_by [alertname, namespace]

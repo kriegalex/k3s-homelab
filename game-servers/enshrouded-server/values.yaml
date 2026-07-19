@@ -1,13 +1,13 @@
-# enshrouded-server — chart: enshrouded-server v1.0.6.
+# enshrouded-server — chart: enshrouded-server v1.1.0.
 # Real deployed values (source of truth for `helm upgrade -f values.yaml`).
-# The server password is PII/credential — kept out of git. It is layered at
-# deploy time from the gitignored fragment:
-#   helm upgrade --install enshrouded-server <chart> -n game-servers \
-#     -f values.yaml -f helm-values-secret.yaml
+# The server password lives in the manually created Secret referenced by
+# `existingSecret` (shape: secrets-template.yaml — key SERVER_PASSWORD):
+#   helm upgrade --install enshrouded-server k8s-charts/enshrouded-server \
+#     --version 1.1.0 -n game-servers -f values.yaml
 enshrouded:
+  existingSecret: enshrouded-server-credentials
   maxPlayers: 8
   serverName: Ste ApoLAN Server
-  serverPassword: ""   # real value in helm-values-secret.yaml (gitignored)
 persistence:
   enabled: true
   size: 10Gi

@@ -116,6 +116,14 @@ nip05:
 
 # Global configuration
 config:
+  # The complete strfry.conf is served from the manually created Secret
+  # `nostr-strfry-config` (chart >= 1.3.0) so the NIP-11 `self` npub (PII)
+  # stays out of git. With existingSecret set, the chart ignores every other
+  # `config.*` value — the block below stays committed as the SOURCE for
+  # regenerating that Secret. To change any relay setting: edit below, then
+  # regenerate + reapply the Secret and restart the pod (procedure in
+  # secrets-template.yaml).
+  existingSecret: nostr-strfry-config
   # -- Directory that contains the strfry LMDB database
   db: "/app/strfry-db"
 
@@ -165,7 +173,9 @@ config:
       icon: "https://image.nostr.build/19b2f3f232b0a962b2cc2bd0d74156235b126102e45a3fc3be93c8528e05e034.png"
       # -- List of supported NIPs as JSON array, or empty string to use default
       nips: ""
-      # -- NIP-11: Relay's own pubkey (npub or hex format)
+      # -- NIP-11: Relay's own pubkey (npub or hex format). Kept blank in git
+      # (PII); the real npub lives only in the nostr-strfry-config Secret —
+      # supply it via --set during regeneration (see secrets-template.yaml).
       self: ""
       # -- NIP-11: Banner image URL
       banner: ""

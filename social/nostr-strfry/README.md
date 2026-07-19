@@ -148,12 +148,13 @@ securityContext:
 ### 5. Install with Helm
 
 ```bash
+# First create the nostr-strfry-config Secret (full rendered strfry.conf,
+# incl. the NIP-11 self npub) — generation procedure in secrets-template.yaml
 helm upgrade --install nostr-strfry k8s-charts/nostr-strfry \
   --namespace nostr \
   --create-namespace \
-  --version 1.1.2 \
-  -f values.yaml \
-  -f helm-values-secret.yaml
+  --version 1.3.0 \
+  -f values.yaml
 ```
 
 ### 6. Verify Deployment
@@ -415,8 +416,7 @@ helm repo update
 helm upgrade nostr-strfry k8s-charts/nostr-strfry \
   --namespace nostr \
   --version <new-version> \
-  -f values.yaml \
-  -f helm-values-secret.yaml
+  -f values.yaml
 ```
 
 > **Note:** Always backup the database before upgrading!

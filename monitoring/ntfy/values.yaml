@@ -10,8 +10,9 @@
 # Install:
 #   kubectl create namespace ntfy
 #   kubectl apply -f ntfy-secrets.yaml   # see README and secrets-template.yaml
+#   # + create the ntfy-web-push-email Secret (see secrets-template.yaml)
 #   helm upgrade --install ntfy oci://codeberg.org/wrenix/helm-charts/ntfy \
-#     --version 0.5.15 -n ntfy -f values.yaml -f helm-values.yaml
+#     --version 0.5.15 -n ntfy -f values.yaml
 
 ntfy:
   # Must match the public URL Traefik routes to ntfy — otherwise web-push
@@ -43,10 +44,21 @@ ntfy:
 
   # Auto-generate VAPID keys on first install so the mobile/web app
   # can receive push. Stored in a Secret by the chart.
+  # The emailAddress below is a deliberate PLACEHOLDER: the real contact
+  # e-mail (PII) is injected as NTFY_WEB_PUSH_EMAIL_ADDRESS via the envFrom
+  # Secret below — ntfy env vars override server.yml, so the placeholder
+  # never reaches clients. (Replaced the old helm-values-secret.yaml layer.)
   webPush:
     keys:
       create: true
     emailAddress: "admin@lourenco.ch"
+
+# Injects NTFY_WEB_PUSH_EMAIL_ADDRESS from the manually created Secret
+# (shape in secrets-template.yaml). Appended after the chart's own
+# ntfy-env ConfigMap/Secret refs; distinct keys, no collision.
+envFrom:
+  - secretRef:
+      name: ntfy-web-push-email
 
 persistence:
   enabled: true

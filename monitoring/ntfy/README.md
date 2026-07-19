@@ -14,10 +14,12 @@ kubectl create namespace ntfy
 # 1. Edit secrets-template.yaml (placeholders → real passwords),
 #    save as ntfy-secrets.yaml (gitignored), then apply:
 kubectl apply -f ntfy-secrets.yaml
-# 2. Create helm-values-secret.yaml (gitignored) with your real domain — see
-#    "Personal overrides" under Configuration below.
+# 2. Create the web-push contact e-mail Secret — see "Web-push contact
+#    e-mail" under Configuration below.
+kubectl -n ntfy create secret generic ntfy-web-push-email \
+  --from-literal=NTFY_WEB_PUSH_EMAIL_ADDRESS='<your-admin-email>'
 helm upgrade --install ntfy oci://codeberg.org/wrenix/helm-charts/ntfy \
-  --version 0.5.15 -n ntfy -f values.yaml -f helm-values-secret.yaml
+  --version 0.5.15 -n ntfy -f values.yaml
 # After the pod is Ready, bootstrap users (see §3).
 ```
 
@@ -44,41 +46,28 @@ One topic per source so each can be muted/unsubscribed independently:
 
 Subscribe to all three from the ntfy Android/iOS app.
 
-### Personal overrides (`helm-values-secret.yaml`)
+### Web-push contact e-mail (`ntfy-web-push-email` Secret)
 
-`values.yaml` uses generic `homelab.example.com` placeholders so anyone can
-clone the repo and read the config without surprises. Before deploying, create
-a gitignored `helm-values-secret.yaml` with your real domain and admin contact email:
+`values.yaml` keeps a placeholder `webPush.emailAddress` (the address is PII).
+The real one is injected as an env var from a manually created Secret — ntfy
+env vars override `server.yml`, so the placeholder never reaches clients:
 
-```yaml
-ntfy:
-  baseURL: "https://ntfy.<your-domain>"
-  webPush:
-    emailAddress: "<your-admin-email>"   # shown in VAPID contact info
-
-ingress:
-  hosts:
-    - host: ntfy.<your-domain>
-      paths:
-        - path: /
-          pathType: Prefix
-  tls:
-    - hosts:
-        - ntfy.<your-domain>
-      secretName: ntfy-tls
+```bash
+kubectl -n ntfy create secret generic ntfy-web-push-email \
+  --from-literal=NTFY_WEB_PUSH_EMAIL_ADDRESS='<your-admin-email>'   # shown in VAPID contact info
 ```
 
-This file is layered via `-f values.yaml` in the install command and is
-never committed.
+(Real domain/baseURL/ingress hosts are committed directly in `values.yaml`
+since the 2026-06-26 source-of-truth inversion — no override layer needed.)
 
 ### Files in this folder
 
 | File                       | Purpose                                                              |
 | -------------------------- | -------------------------------------------------------------------- |
 | `values.yaml`              | Helm overrides vs upstream defaults. Committed source of truth.      |
-| `secrets-template.yaml`    | Placeholder Secret with bootstrap credentials. Committed.            |
+| `secrets-template.yaml`    | Placeholder Secrets: bootstrap credentials + web-push e-mail. Committed. |
 | `ntfy-secrets.yaml`        | (gitignored) Real bootstrap credentials.                             |
-| `helm-values-secret.yaml`         | (gitignored) Snapshot of the live release values.                    |
+| `helm-values.yaml`         | (gitignored) Snapshot of the live release values.                    |
 
 ### Why these overrides
 
@@ -126,7 +115,7 @@ To add personal subscriber accounts later, repeat `ntfy user add` and grant
 
 ```bash
 helm -n ntfy upgrade ntfy oci://codeberg.org/wrenix/helm-charts/ntfy \
-  --version <new-version> -f values.yaml -f helm-values-secret.yaml
+  --version <new-version> -f values.yaml
 ```
 
 Bump the version pin in `values.yaml`'s header comment and in this README's

@@ -6,7 +6,7 @@ Alertmanager (configured in `monitoring/values.yaml`) to the in-cluster
 ntfy server in [`../ntfy/`](../ntfy/).
 
 Chart: [`k8s-charts/alertmanager-ntfy`](https://github.com/kriegalex/k8s-charts/tree/main/charts/alertmanager-ntfy)
-v0.2.0 — an AGPL-3.0 fork of the upstream
+v0.3.0 — an AGPL-3.0 fork of the upstream
 [`xenrox/ntfy-alertmanager`](https://codeberg.org/xenrox/ntfy-alertmanager)
 `contrib/charts/alertmanager-ntfy` chart, extended to expose the full
 set of scfg config knobs (`alert-mode`, `ntfy.template-path`,
@@ -19,11 +19,10 @@ set of scfg config knobs (`alert-mode`, `ntfy.template-path`,
 helm repo add k8s-charts https://kriegalex.github.io/k8s-charts/   # one-time
 helm repo update
 kubectl create namespace ntfy   # shared with the ntfy server; skip if already created
-cp secrets-template.yaml helm-values-secret.yaml
-# Edit helm-values-secret.yaml — fill in the publisher password
+# Create the alertmanager-ntfy-config Secret (full rendered bridge config +
+# credentials) — generation procedure in secrets-template.yaml
 helm upgrade --install alertmanager-ntfy k8s-charts/alertmanager-ntfy \
-  --version 0.2.0 -n ntfy \
-  -f values.yaml -f helm-values-secret.yaml
+  --version 0.3.0 -n ntfy -f values.yaml
 ```
 
 Then point Alertmanager at it — see "Wiring Alertmanager" below.
@@ -42,20 +41,21 @@ Then point Alertmanager at it — see "Wiring Alertmanager" below.
 
 | File                      | Purpose                                                                               |
 | ------------------------- | ------------------------------------------------------------------------------------- |
-| `values.yaml`             | Helm overrides vs upstream defaults. Committed source of truth.                       |
-| `secrets-template.yaml`   | Template for `helm-values-secret.yaml`. Committed.                                    |
-| `helm-values-secret.yaml` | (gitignored) Real ntfy publisher credentials, layered on top of `values.yaml`.        |
+| `values.yaml`             | Helm overrides vs upstream defaults. Committed source of truth for the config *shape* (credentials excluded). |
+| `secrets-template.yaml`   | Procedure + credential template for the manually created `alertmanager-ntfy-config` Secret. Committed. |
 | `helm-values.yaml`        | (gitignored) Snapshot of the live release values.                                     |
 
 ## Why this is configured the way it is
 
-- **Credentials in a separate file.** The chart renders the bridge's
-  config — including ntfy `user`/`password` — directly into a
-  Helm-managed `Secret` from `.Values.ntfyAlertmanager.ntfy.{user,password}`.
-  There is no `envFrom` or external-secret hook exposed, so the standard
-  "point at a sealed Secret" pattern doesn't apply. We instead layer a
-  second `-f helm-values-secret.yaml` (gitignored) that supplies only
-  those two fields.
+- **Credentials in a manually created Secret (chart ≥ 0.3.0).** The chart's
+  `ntfyAlertmanager.existingSecret` points the deployment at the
+  `alertmanager-ntfy-config` Secret, which holds the complete rendered scfg
+  config (including the ntfy publisher credentials) plus `template.tmpl`.
+  The chart then renders no Secret of its own and ignores the rest of the
+  `ntfyAlertmanager.*` block — that block stays committed in `values.yaml`
+  as the source for regenerating the config (procedure in
+  `secrets-template.yaml`). This replaced the old gitignored
+  `helm-values-secret.yaml` second `-f` layering.
 - **Topic URL uses the cluster-internal Service.** No reason for
   Alertmanager → bridge → ntfy traffic to leave the cluster and round-trip
   through Traefik/cert-manager.
@@ -133,7 +133,7 @@ didn't route to the bridge — re-check `monitoring/values.yaml`.
 helm repo update k8s-charts
 helm --kube-context=default -n ntfy upgrade alertmanager-ntfy k8s-charts/alertmanager-ntfy \
   --version <new-version> \
-  -f values.yaml -f helm-values-secret.yaml
+  -f values.yaml
 ```
 
 No post-install patches required — `/health` probes and full scfg
