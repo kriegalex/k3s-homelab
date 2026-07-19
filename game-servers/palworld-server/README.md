@@ -1,6 +1,6 @@
 # Deploy Palworld Server
 
-**Chart Version:** 1.1.0+ (supports existingSecret for secure password management)
+**Chart Version:** 1.2.1+ (supports existingSecret for secure password management)
 
 ## Persistent Storage
 
@@ -52,7 +52,7 @@ helm repo update
 helm upgrade --install palworld-server k8s-charts/palworld-server \
   --namespace game-servers \
   --create-namespace \
-  --version 1.1.0 \
+  --version 1.2.1 \
   -f values.yaml
 ```
 
