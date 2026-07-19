@@ -40,6 +40,13 @@ data:
     DEFAULT_IMPERSONATE = os.environ.get("IMPERSONATE", "chrome")
     TIMEOUT = int(os.environ.get("FETCH_TIMEOUT", "25"))
     MAX_BYTES = int(os.environ.get("MAX_BYTES", "3000000"))
+    # Mail click-trackers (e.g. SendGrid in homegate alerts) whose links must be
+    # resolved to the real portal URL before the DataDome cookie is applied.
+    REDIRECTORS = tuple(
+        h.strip().lower()
+        for h in os.environ.get("REDIRECTOR_HOSTS", "sendgrid.net").split(",")
+        if h.strip()
+    )
 
     def host_allowed(host):
         host = (host or "").lower()
@@ -105,6 +112,46 @@ data:
             dd_cookie = self.headers.get("X-DD-Cookie") or (q.get("cookie") or [""])[0]
             req_headers = {"User-Agent": ua} if ua else {}
             req_cookies = {"datadome": dd_cookie} if dd_cookie else {}
+
+            # If the target is a mail click-tracker (SendGrid in homegate alerts), resolve
+            # its redirect(s) to the real portal URL FIRST. We follow hop-by-hop via the
+            # Location header (allow_redirects=False) WITHOUT the cookie, so we never fetch
+            # the portal un-authenticated — i.e. no cookie-less 403 that would ding the
+            # home IP's DataDome reputation. Only a resolved host that is itself in
+            # ALLOWED_HOSTS (a known portal) is then fetched, with the cookie, below.
+            def _is_redirector(h):
+                h = (h or "").lower()
+                return any(h == s or h.endswith("." + s) for s in REDIRECTORS)
+
+            if _is_redirector(host):
+                hop = target
+                resolved = None
+                for _ in range(5):
+                    try:
+                        rr = requests.get(hop, impersonate=impersonate, headers=req_headers,
+                                          allow_redirects=False, timeout=TIMEOUT)
+                    except Exception as exc:  # noqa: BLE001
+                        return self._reply(200, {"status": 0, "error": "resolve failed",
+                                                 "detail": str(exc)[:200]})
+                    loc = rr.headers.get("location")
+                    if not loc:
+                        break
+                    if loc.startswith("/"):
+                        from urllib.parse import urljoin
+                        loc = urljoin(hop, loc)
+                    if _is_redirector(urlparse(loc).hostname or ""):
+                        hop = loc
+                        continue
+                    resolved = loc.split("#")[0].split("?")[0]
+                    break
+                if not resolved:
+                    return self._reply(200, {"status": 0, "error": "unresolved redirector",
+                                             "final_url": hop})
+                rhost = urlparse(resolved).hostname or ""
+                if not host_allowed(rhost) or not resolves_to_public(rhost):
+                    return self._reply(200, {"status": 0, "error": "resolved host not allowed",
+                                             "final_url": resolved})
+                target = resolved
 
             try:
                 r = requests.get(
@@ -175,8 +222,13 @@ spec:
             - { name: PYTHONPATH, value: "/pylibs" }
             - { name: HOME, value: "/tmp" }
             - { name: PIP_DISABLE_PIP_VERSION_CHECK, value: "1" }
+            # Portal hosts we fetch, plus mail click-trackers (REDIRECTOR_HOSTS) whose
+            # links are resolved to a portal URL before the cookie is applied. A resolved
+            # redirect is only fetched if its final host is also in this list.
             - name: ALLOWED_HOSTS
-              value: "comparis.ch,homegate.ch,immoscout24.ch,newhome.ch,immobilier.ch,petitesannonces.ch,gerofinance.ch,gruyere-immo.ch,sallin-immobilier.ch,flatfox.ch,anibis.ch"
+              value: "comparis.ch,homegate.ch,immoscout24.ch,newhome.ch,immobilier.ch,petitesannonces.ch,gerofinance.ch,gruyere-immo.ch,sallin-immobilier.ch,flatfox.ch,anibis.ch,sendgrid.net"
+            - name: REDIRECTOR_HOSTS
+              value: "sendgrid.net"
           ports:
             - { name: http, containerPort: 8080 }
           startupProbe:

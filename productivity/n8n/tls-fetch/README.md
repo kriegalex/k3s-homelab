@@ -47,6 +47,24 @@ GET /fetch?url=<url>
 - Headers are used (not query params) so the token stays out of URLs/logs. Cookie name is
   `datadome` for the whole SMG pool.
 
+### Mail click-tracker resolution (homegate alerts)
+
+Homegate alert e-mails wrap the listing link in a SendGrid click-tracker
+(`*.sendgrid.net/ls/click?...`) instead of a direct URL. When the target host is a
+`REDIRECTOR_HOSTS` entry, the sidecar first resolves it to the real portal URL, then
+applies the cookie to that:
+
+- Resolution follows the `Location` header hop-by-hop (`allow_redirects=False`) **without
+  the cookie**, so the portal is never fetched un-authenticated — no cookie-less 403 that
+  would ding the home IP's DataDome reputation. (The cookie also would not survive a
+  cross-domain redirect anyway — verified: single-call sendgrid+cookie → 403, resolve-then-
+  fetch → 200.)
+- Only a resolved host that is itself in `ALLOWED_HOSTS` (a known portal) is then fetched,
+  with the cookie. Tracking query params are stripped. Redirector hosts must be in **both**
+  `ALLOWED_HOSTS` (to accept the inbound link) and `REDIRECTOR_HOSTS` (to trigger resolution).
+- Direct portal links (immoscout `/louer/<id>`) are not redirectors → fetched straight with
+  the cookie, no extra request. So this path is homegate-only and transparent to the caller.
+
 ## Deploy
 
 ```bash

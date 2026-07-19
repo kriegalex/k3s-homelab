@@ -130,21 +130,12 @@
           },
           "conditions": [
             {
-              "id": "i1",
-              "leftValue": "={{ $json.source }}",
-              "rightValue": "email-immoscout24",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            },
-            {
-              "id": "i2",
-              "leftValue": "={{ $json.url }}",
+              "id": "s1",
+              "leftValue": "={{ ['email-immoscout24','email-homegate'].includes($json.source) && ($json.url ? true : false) }}",
               "rightValue": "",
               "operator": {
-                "type": "string",
-                "operation": "notEmpty",
+                "type": "boolean",
+                "operation": "true",
                 "singleValue": true
               }
             }
@@ -154,7 +145,7 @@
         "options": {}
       },
       "id": "a21e0000-0000-4000-8000-000000000008",
-      "name": "Immo?",
+      "name": "SMG portal?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -165,11 +156,13 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT datadome, user_agent, status FROM portal_cookies WHERE portal = 'immoscout24' LIMIT 1",
-        "options": {}
+        "query": "SELECT datadome, user_agent, status FROM portal_cookies WHERE portal = $1 LIMIT 1",
+        "options": {
+          "queryReplacement": "={{ [ ($json.source || '').replace('email-','') ] }}"
+        }
       },
       "id": "a21e0000-0000-4000-8000-000000000009",
-      "name": "IS24 load token",
+      "name": "SMG load token",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
@@ -220,7 +213,7 @@
         "options": {}
       },
       "id": "a21e0000-0000-4000-8000-00000000000a",
-      "name": "IS24 active?",
+      "name": "SMG active?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -231,7 +224,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "=http://tls-fetch.n8n.svc.cluster.local:8080/fetch?url={{ encodeURIComponent($('Immo?').item.json.url) }}",
+        "url": "=http://tls-fetch.n8n.svc.cluster.local:8080/fetch?url={{ encodeURIComponent($('SMG portal?').item.json.url) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -250,7 +243,7 @@
         }
       },
       "id": "a21e0000-0000-4000-8000-00000000000b",
-      "name": "IS24 fetch",
+      "name": "SMG fetch",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -262,10 +255,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// APPT 21 \"IS24 parse\" — enrich an email-immoscout24 listing from its detail page,\n// fetched through tls-fetch WITH the replayed DataDome cookie. Also classifies the\n// result for the circuit breaker (see portal_cookies / tls-fetch README):\n//   200 → enrich + roll the token forward (_dd_new_status='active', _dd_refreshed=new)\n//   403 → cookie dead → _dd_blocked=true, _dd_new_status='expired' (NEVER retried; the\n//         breaker then stops all immoscout fetches until the user re-seeds the token)\n//   other (timeout/5xx) → transient: leave token active, listing un-enriched, no alert.\nconst base = $('Immo?').item.json;\nconst resp = $json || {};\nconst status = Number(resp.status) || 0;\nconst html = typeof resp.body === 'string' ? resp.body : '';\n\nfunction out(extra) {\n  return [{ json: { ...base, _enriched: false, _dd_status: status,\n    _dd_blocked: status === 403,\n    _dd_new_status: status === 403 ? 'expired' : 'active',\n    _dd_refreshed: '',\n    ...extra } }];\n}\n\nif (status !== 200 || !html) return out({ _enrich_note: 'fetch ' + (status || 'failed') });\n\n// live listing data now lives in window.__PINIA_INITIAL_STATE__ (Vue/Pinia)\nconst m = html.match(/window\\.__PINIA_INITIAL_STATE__\\s*=\\s*(\\{[\\s\\S]*?\\})\\s*<\\/script>/);\nif (!m) return out({ _enrich_note: 'no pinia state' });\nlet L;\ntry { L = JSON.parse(m[1]).listing.listing; } catch (e) { return out({ _enrich_note: 'pinia parse failed' }); }\nif (!L) return out({ _enrich_note: 'no listing object' });\n\nconst ch = L.characteristics || {};\nconst addr = L.address || {};\nconst geo = addr.geoCoordinates || {};\nconst rent = (L.prices && L.prices.rent) || {};\n\n// localization: prefer fr, then de/it/en\nconst loc = L.localization || {};\nconst lang = ['fr', 'de', 'it', 'en'].find(k => loc[k] && loc[k].text) || Object.keys(loc)[0];\nconst txt = (loc[lang] && loc[lang].text) || {};\nconst stripHtml = s => String(s || '').replace(/<br\\s*\\/?>/gi, '\\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/[ \\t]+\\n/g, '\\n').trim();\nconst title = txt.title || base.title;\nconst description = stripHtml(txt.description) || base.description;\n\n// images: localization.<lang>.attachments[] type IMAGE\nconst atts = (loc[lang] && Array.isArray(loc[lang].attachments)) ? loc[lang].attachments : [];\nconst images = atts.filter(a => a && a.type === 'IMAGE' && a.url).map(a => a.url).slice(0, 6);\n\n// rent: structured amount if present, else parse the free-text description\nconst money = v => { if (v == null) return null; const s = String(v).match(/(\\d[\\d'\\u2019 ]*)/); return s ? parseInt(s[1].replace(/['\\u2019 ]/g, ''), 10) : null; };\nlet net = money(rent.net && rent.net.amount);\nlet gross = money(rent.gross && rent.gross.amount);\nif (net == null && gross == null && description) {\n  // require an explicit currency marker (CHF / .- / fr) so a bare year like 2026\n  // in an availability date is not misread as the rent.\n  const mm = description.match(/chf\\s*(\\d[\\d'\\u2019 ]{2,})|(\\d[\\d'\\u2019 ]{2,})\\s*(?:\\.-|chf|frs?\\b)/i);\n  const amt = mm ? parseInt((mm[1] || mm[2]).replace(/['\\u2019 ]/g, ''), 10) : null;\n  if (amt && amt > 200 && amt < 20000) {\n    if (/charges?\\s*comprises?|inkl|incl|c\\.?c\\.?/i.test(description)) gross = amt; else net = amt;\n  }\n}\n\nconst lister = L.lister || {};\nconst agency = lister.legalName || (L.listerBranding && L.listerBranding.legalName) || null;\nconst phone = lister.contacts && lister.contacts.inquiry && lister.contacts.inquiry.phone;\nconst street = (addr.street && addr.street !== addr.locality) ? addr.street : base.address_raw;\n\nreturn [{ json: {\n  ...base,\n  _enriched: true,\n  _enrich_note: null,\n  _dd_status: 200,\n  _dd_blocked: false,\n  _dd_new_status: 'active',\n  _dd_refreshed: resp.datadome || '',\n  title,\n  rent_net: net ?? base.rent_net,\n  rent_gross: gross ?? base.rent_gross,\n  rooms: ch.numberOfRooms != null ? Number(ch.numberOfRooms) : base.rooms,\n  m2: ch.livingSpace != null ? Number(ch.livingSpace) : base.m2,\n  commune: addr.locality || base.commune,\n  address_raw: street,\n  description,\n  images: images.length ? images : base.images,\n  lat: typeof geo.latitude === 'number' ? geo.latitude : null,\n  lng: typeof geo.longitude === 'number' ? geo.longitude : null,\n  agency,\n  agency_contact: phone || null,\n} }];\n"
+        "jsCode": "// APPT 21 \"SMG parse\" — enrich an SMG-pool listing (immoscout24 / homegate: same\n// Vue/Pinia frontend, window.__PINIA_INITIAL_STATE__.listing.listing) from its detail\n// page, fetched through tls-fetch WITH the replayed DataDome cookie. Also classifies\n// the result for the circuit breaker (see portal_cookies / tls-fetch README):\n//   200 → enrich + roll the token forward (_dd_new_status='active', _dd_refreshed=new)\n//   403 → cookie dead → _dd_blocked=true, _dd_new_status='expired' (NEVER retried; the\n//         breaker then stops all fetches for that portal until the user re-seeds it)\n//   other (timeout/5xx) → transient: leave token active, listing un-enriched, no alert.\nconst base = $('SMG portal?').item.json;\nconst portal = (base.source || '').replace('email-', '');\nconst resp = $json || {};\nconst status = Number(resp.status) || 0;\nconst html = typeof resp.body === 'string' ? resp.body : '';\n\nfunction out(extra) {\n  return [{ json: { ...base, _enriched: false, _portal: portal, _dd_status: status,\n    _dd_blocked: status === 403,\n    _dd_new_status: status === 403 ? 'expired' : 'active',\n    _dd_refreshed: '',\n    ...extra } }];\n}\nif (status !== 200 || !html) return out({ _enrich_note: 'fetch ' + (status || 'failed') });\n\n// live listing data lives in window.__PINIA_INITIAL_STATE__ (Vue/Pinia; note spaces around =)\nconst m = html.match(/window\\.__PINIA_INITIAL_STATE__\\s*=\\s*(\\{[\\s\\S]*?\\})\\s*<\\/script>/);\nif (!m) return out({ _enrich_note: 'no pinia state' });\nlet L;\ntry { L = JSON.parse(m[1]).listing.listing; } catch (e) { return out({ _enrich_note: 'pinia parse failed' }); }\nif (!L) return out({ _enrich_note: 'no listing object' });\n\nconst ch = L.characteristics || {};\nconst addr = L.address || {};\nconst geo = addr.geoCoordinates || {};\nconst rent = (L.prices && L.prices.rent) || {};\n\n// localization: prefer fr, then de/it/en\nconst loc = L.localization || {};\nconst lang = ['fr', 'de', 'it', 'en'].find(k => loc[k] && loc[k].text) || Object.keys(loc)[0];\nconst txt = (loc[lang] && loc[lang].text) || {};\nconst stripHtml = s => String(s || '').replace(/<br\\s*\\/?>/gi, '\\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/[ \\t]+\\n/g, '\\n').trim();\nconst title = txt.title || base.title;\nconst description = stripHtml(txt.description) || base.description;\n\n// images: localization.<lang>.attachments[] type IMAGE\nconst atts = (loc[lang] && Array.isArray(loc[lang].attachments)) ? loc[lang].attachments : [];\nconst images = atts.filter(a => a && a.type === 'IMAGE' && a.url).map(a => a.url).slice(0, 6);\n\n// rent: prices.rent.{net,gross,extra} are plain numbers on this platform (occasionally\n// wrapped as {amount}); fall back to a currency-anchored parse of the description text.\nconst money = v => { if (v == null) return null; const s = String(v).match(/(\\d[\\d'\\u2019 ]*)/); return s ? parseInt(s[1].replace(/['\\u2019 ]/g, ''), 10) : null; };\nconst amtOf = v => (v && typeof v === 'object') ? money(v.amount) : money(v);\nlet net = amtOf(rent.net);\nlet gross = amtOf(rent.gross);\nlet charges = amtOf(rent.extra);\nif (net == null && gross == null && description) {\n  // require an explicit currency marker (CHF / .- / fr) so a bare year like 2026\n  // in an availability date is not misread as the rent.\n  const mm = description.match(/chf\\s*(\\d[\\d'\\u2019 ]{2,})|(\\d[\\d'\\u2019 ]{2,})\\s*(?:\\.-|chf|frs?\\b)/i);\n  const amt = mm ? parseInt((mm[1] || mm[2]).replace(/['\\u2019 ]/g, ''), 10) : null;\n  if (amt && amt > 200 && amt < 20000) {\n    if (/charges?\\s*comprises?|inkl|incl|c\\.?c\\.?/i.test(description)) gross = amt; else net = amt;\n  }\n}\nif (charges == null && net != null && gross != null && gross > net) charges = gross - net;\n\nconst lister = L.lister || {};\nconst agency = lister.legalName || (L.listerBranding && L.listerBranding.legalName) || null;\nconst phone = lister.contacts && lister.contacts.inquiry && lister.contacts.inquiry.phone;\nconst street = (addr.street && addr.street !== addr.locality) ? addr.street : base.address_raw;\n\nreturn [{ json: {\n  ...base,\n  _enriched: true,\n  _enrich_note: null,\n  _portal: portal,\n  _dd_status: 200,\n  _dd_blocked: false,\n  _dd_new_status: 'active',\n  _dd_refreshed: resp.datadome || '',\n  title,\n  rent_net: net ?? base.rent_net,\n  rent_gross: gross ?? base.rent_gross,\n  charges: charges ?? base.charges,\n  rooms: ch.numberOfRooms != null ? Number(ch.numberOfRooms) : base.rooms,\n  m2: ch.livingSpace != null ? Number(ch.livingSpace) : base.m2,\n  commune: addr.locality || base.commune,\n  address_raw: street,\n  description,\n  images: images.length ? images : base.images,\n  lat: typeof geo.latitude === 'number' ? geo.latitude : null,\n  lng: typeof geo.longitude === 'number' ? geo.longitude : null,\n  agency,\n  agency_contact: phone || null,\n} }];\n"
       },
       "id": "a21e0000-0000-4000-8000-00000000000c",
-      "name": "IS24 parse",
+      "name": "SMG parse",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -276,13 +269,13 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE portal_cookies SET datadome = COALESCE(NULLIF($1, ''), datadome), status = $2, last_ok = CASE WHEN $2 = 'active' THEN now() ELSE last_ok END, last_checked = now(), updated_at = now() WHERE portal = 'immoscout24'",
+        "query": "UPDATE portal_cookies SET datadome = COALESCE(NULLIF($1, ''), datadome), status = $2, last_ok = CASE WHEN $2 = 'active' THEN now() ELSE last_ok END, last_checked = now(), updated_at = now() WHERE portal = $3",
         "options": {
-          "queryReplacement": "={{ [ $json._dd_refreshed ?? '', $json._dd_new_status ?? 'active' ] }}"
+          "queryReplacement": "={{ [ $json._dd_refreshed ?? '', $json._dd_new_status ?? 'active', $json._portal ?? '' ] }}"
         }
       },
       "id": "a21e0000-0000-4000-8000-00000000000d",
-      "name": "IS24 write token",
+      "name": "SMG write token",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
@@ -323,7 +316,7 @@
         "options": {}
       },
       "id": "a21e0000-0000-4000-8000-00000000000e",
-      "name": "IS24 blocked?",
+      "name": "SMG blocked?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
@@ -340,7 +333,7 @@
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ topic: 'homelab-appart', title: 'APPT 21: cookie ImmoScout expiré', message: 'Le cookie DataDome immoscout24 est expiré (403). Enrichissement immoscout suspendu jusqu\\u2019à recapture — voir productivity/n8n/tls-fetch/README.md.', priority: 4, tags: ['warning','closed_lock_with_key'] }) }}",
+        "jsonBody": "={{ JSON.stringify({ topic: 'homelab-appart', title: 'APPT 21: cookie ' + ($('SMG parse').item.json._portal || 'SMG') + ' expiré', message: 'Le cookie DataDome ' + ($('SMG parse').item.json._portal || 'SMG') + ' est expiré (403). Enrichissement suspendu pour ce portail jusqu\\u2019à recapture — voir productivity/n8n/tls-fetch/README.md.', priority: 4, tags: ['warning','closed_lock_with_key'] }) }}",
         "options": {}
       },
       "id": "a21e0000-0000-4000-8000-00000000000f",
@@ -363,11 +356,11 @@
         "operation": "executeQuery",
         "query": "SELECT reputation, note FROM agency_reputation WHERE lower(name) = lower($1) LIMIT 1",
         "options": {
-          "queryReplacement": "={{ [ $('IS24 parse').item.json.agency ?? '' ] }}"
+          "queryReplacement": "={{ [ $('SMG parse').item.json.agency ?? '' ] }}"
         }
       },
       "id": "a21e0000-0000-4000-8000-000000000010",
-      "name": "IS24 lookup agency",
+      "name": "SMG lookup agency",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
@@ -385,10 +378,10 @@
     },
     {
       "parameters": {
-        "jsCode": "const listing = $('IS24 parse').item.json;\nconst row = ($json && $json.reputation) ? $json : null;\nlet agency_reputation = null;\nif (row) agency_reputation = row.reputation + (row.note ? ' — ' + row.note : '');\n// strip the internal circuit-breaker fields before emitting downstream\nconst { _dd_status, _dd_blocked, _dd_new_status, _dd_refreshed, ...clean } = listing;\nreturn [{ json: { ...clean, agency_reputation } }];"
+        "jsCode": "const listing = $('SMG parse').item.json;\nconst row = ($json && $json.reputation) ? $json : null;\nlet agency_reputation = null;\nif (row) agency_reputation = row.reputation + (row.note ? ' — ' + row.note : '');\n// strip the internal circuit-breaker fields before emitting downstream\nconst { _dd_status, _dd_blocked, _dd_new_status, _dd_refreshed, _portal, ...clean } = listing;\nreturn [{ json: { ...clean, agency_reputation } }];"
       },
       "id": "a21e0000-0000-4000-8000-000000000011",
-      "name": "IS24 attach reputation",
+      "name": "SMG attach reputation",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -398,10 +391,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// cookie inactive/expired → circuit breaker OPEN: make no request, pass the\n// email-sourced listing through un-enriched so it is still notified.\nreturn [{ json: { ...$('Immo?').item.json, _enriched: false, _enrich_note: 'immoscout cookie inactive' } }];"
+        "jsCode": "// cookie inactive/expired → circuit breaker OPEN: make no request, pass the\n// email-sourced listing through un-enriched so it is still notified.\nreturn [{ json: { ...$('SMG portal?').item.json, _enriched: false, _enrich_note: 'SMG cookie inactive' } }];"
       },
       "id": "a21e0000-0000-4000-8000-000000000012",
-      "name": "IS24 skip",
+      "name": "SMG skip",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -444,7 +437,7 @@
         ],
         [
           {
-            "node": "Immo?",
+            "node": "SMG portal?",
             "type": "main",
             "index": 0
           }
@@ -495,11 +488,11 @@
         ]
       ]
     },
-    "Immo?": {
+    "SMG portal?": {
       "main": [
         [
           {
-            "node": "IS24 load token",
+            "node": "SMG load token",
             "type": "main",
             "index": 0
           }
@@ -513,79 +506,79 @@
         ]
       ]
     },
-    "IS24 load token": {
+    "SMG load token": {
       "main": [
         [
           {
-            "node": "IS24 active?",
+            "node": "SMG active?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "IS24 active?": {
+    "SMG active?": {
       "main": [
         [
           {
-            "node": "IS24 fetch",
+            "node": "SMG fetch",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "IS24 skip",
+            "node": "SMG skip",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "IS24 fetch": {
+    "SMG fetch": {
       "main": [
         [
           {
-            "node": "IS24 parse",
+            "node": "SMG parse",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "IS24 parse": {
+    "SMG parse": {
       "main": [
         [
           {
-            "node": "IS24 lookup agency",
+            "node": "SMG lookup agency",
             "type": "main",
             "index": 0
           },
           {
-            "node": "IS24 write token",
+            "node": "SMG write token",
             "type": "main",
             "index": 0
           },
           {
-            "node": "IS24 blocked?",
+            "node": "SMG blocked?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "IS24 lookup agency": {
+    "SMG lookup agency": {
       "main": [
         [
           {
-            "node": "IS24 attach reputation",
+            "node": "SMG attach reputation",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "IS24 attach reputation": {
+    "SMG attach reputation": {
       "main": [
         [
           {
@@ -596,7 +589,7 @@
         ]
       ]
     },
-    "IS24 blocked?": {
+    "SMG blocked?": {
       "main": [
         [
           {
@@ -608,7 +601,7 @@
         []
       ]
     },
-    "IS24 skip": {
+    "SMG skip": {
       "main": [
         [
           {
