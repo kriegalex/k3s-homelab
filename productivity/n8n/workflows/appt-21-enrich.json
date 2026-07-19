@@ -5,13 +5,13 @@
       "parameters": {
         "inputSource": "passthrough"
       },
-      "id": "a21e0000-0000-4000-8000-000000000001",
+      "id": "780fd1c7-d3f3-415b-8b6f-fc72194405e9",
       "name": "In",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.2,
       "position": [
-        -260,
-        0
+        2160,
+        1472
       ]
     },
     {
@@ -38,30 +38,29 @@
         },
         "options": {}
       },
-      "id": "a21e0000-0000-4000-8000-000000000002",
+      "id": "ef220173-ed01-40e0-b591-6088665c9b17",
       "name": "Enrichable?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        -40,
-        0
+        2384,
+        1472
       ]
     },
     {
       "parameters": {
-        "method": "GET",
         "url": "=http://tls-fetch.n8n.svc.cluster.local:8080/fetch?url={{ encodeURIComponent($json.url) }}",
         "options": {
           "timeout": 35000
         }
       },
-      "id": "a21e0000-0000-4000-8000-000000000003",
+      "id": "f9060ec3-c63e-4bbf-8f5c-40e5db821c3f",
       "name": "Fetch detail",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        180,
-        -140
+        2592,
+        1328
       ],
       "retryOnFail": true,
       "maxTries": 2,
@@ -72,13 +71,13 @@
       "parameters": {
         "jsCode": "// APPT 21 \"Parse detail\" — runs after the tls-fetch HTTP call.\n// Inputs: $json = tls-fetch response {status, final_url, body} (or an error object if the\n// fetch failed under onError:continueRegularOutput). Base listing = the workflow input item.\nconst base = $('In').item.json;\nconst resp = $json || {};\nconst html = typeof resp.body === 'string' ? resp.body : '';\n\n// default: return the listing unchanged (fetch failed / nothing parsed)\nfunction passthrough(reason) {\n  return [{ json: { ...base, _enriched: false, _enrich_note: reason || null } }];\n}\nif (!html || (resp.status && resp.status >= 400)) {\n  return passthrough('fetch ' + (resp.status || 'failed'));\n}\n\n// Comparis detail: extract __NEXT_DATA__ JSON\nif ((base.source || '').startsWith('email-comparis') || /comparis\\.ch/.test(resp.final_url || '')) {\n  const m = html.match(/__NEXT_DATA__\"\\s+type=\"application\\/json\">([\\s\\S]*?)<\\/script>/);\n  if (!m) return passthrough('no __NEXT_DATA__');\n  let pp;\n  try { pp = JSON.parse(m[1]).props.pageProps; } catch (e) { return passthrough('json parse failed'); }\n  const ad = pp.ad || {};\n  const vendor = (pp.contactInformation && pp.contactInformation.VendorInformation) || {};\n\n  const money = v => { if (v == null) return null; const s = String(v).match(/([\\d']+)/); return s ? parseInt(s[1].replace(/'/g, ''), 10) : null; };\n  const priceByKey = k => { const p = (ad.PriceInformation || []).find(x => x.Key === k); return p ? money(p.Value) : null; };\n  const featureOn = keys => (ad.Features || []).some(f => f.Value && keys.includes(f.Key));\n\n  const net = priceByKey('NetRent');\n  const gross = priceByKey('GrossRent') ?? money(ad.PriceText);\n  let charges = priceByKey('Charges') ?? priceByKey('AdditionalCosts');\n  if (charges == null && net != null && gross != null && gross > net) charges = gross - net;\n  const addr = ad.AddressSegments || {};\n  const address_raw = [addr.Street, addr.StreetNumber].filter(Boolean).join(' ') || base.address_raw;\n  const lat = ad.MapData && typeof ad.MapData.GeoPosLat === 'number' ? ad.MapData.GeoPosLat : null;\n  const lng = ad.MapData && typeof ad.MapData.GeoPosLng === 'number' ? ad.MapData.GeoPosLng : null;\n  const features = {\n    balcony: featureOn(['HasBalconies', 'HasTerrace']),\n    elevator: featureOn(['HasLift']),\n    parking: featureOn(['HasParkingIndoor', 'HasParkingOutdoor', 'HasParking']),\n    dishwasher: featureOn(['HasDishwasher']),\n    washingMachine: featureOn(['HasWashingMachine']),\n    pets: featureOn(['PetsAllowed']),\n    minergie: featureOn(['MinergieCertified', 'MinergieCertified_Label']),\n    wheelchair: featureOn(['WheelchairAccessible']),\n  };\n  const images = Array.isArray(ad.ImageUrls) ? ad.ImageUrls.slice(0, 5) : base.images;\n  const agency = vendor.Name || null;\n  const agency_contact = [vendor.VendorContact, vendor.Phone].filter(Boolean).join(' · ') || null;\n\n  return [{ json: {\n    ...base,\n    _enriched: true,\n    _enrich_note: null,\n    url: ad.SharingUrl || base.url,\n    rent_net: net ?? base.rent_net,\n    rent_gross: gross ?? base.rent_gross,\n    charges: charges ?? base.charges,\n    m2: (ad.Area ?? ad.LivingSpace) ? Number(ad.Area ?? ad.LivingSpace) : base.m2,\n    rooms: ad.NumRooms != null ? Number(ad.NumRooms) : base.rooms,\n    commune: addr.City || base.commune,\n    address_raw,\n    floor: ad.Floor != null ? String(ad.Floor) : base.floor,\n    year_built: ad.ConstructionYear ?? base.year_built,\n    description: (ad.Remarks && ad.Remarks.length > (base.description || '').length) ? ad.Remarks : base.description,\n    images,\n    features,\n    lat, lng,\n    agency,\n    agency_contact,\n    partner: ad.PartnerName || null,\n  } }];\n}\n\nreturn passthrough('source not enrichable yet');\n"
       },
-      "id": "a21e0000-0000-4000-8000-000000000004",
+      "id": "aaf0eaee-58a5-45a5-ad4b-653f2670df48",
       "name": "Parse detail",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        400,
-        -140
+        2816,
+        1328
       ]
     },
     {
@@ -89,34 +88,34 @@
           "queryReplacement": "={{ [ $json.agency ?? '' ] }}"
         }
       },
-      "id": "a21e0000-0000-4000-8000-000000000005",
+      "id": "e0c90426-cbb4-4d07-982e-7fb35b86eb06",
       "name": "Lookup agency",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        620,
-        -140
+        3040,
+        1328
       ],
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput",
       "credentials": {
         "postgres": {
           "id": "gZkWl3y38smseXUG",
           "name": "apartments-db"
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "jsCode": "const listing = $('Parse detail').item.json;\nconst row = ($json && $json.reputation) ? $json : null;\nlet agency_reputation = null;\nif (row) agency_reputation = row.reputation + (row.note ? ' — ' + row.note : '');\nreturn [{ json: { ...listing, agency_reputation } }];"
       },
-      "id": "a21e0000-0000-4000-8000-000000000006",
+      "id": "c7f46512-d2e4-46fc-9b7d-9640235c9277",
       "name": "Attach reputation",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        840,
-        -140
+        3264,
+        1328
       ]
     },
     {
@@ -144,13 +143,13 @@
         },
         "options": {}
       },
-      "id": "a21e0000-0000-4000-8000-000000000008",
+      "id": "6c110a64-2a27-4b54-afc8-259163c5f928",
       "name": "SMG portal?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        180,
-        120
+        2592,
+        1600
       ]
     },
     {
@@ -161,22 +160,22 @@
           "queryReplacement": "={{ [ ($json.source || '').replace('email-','') ] }}"
         }
       },
-      "id": "a21e0000-0000-4000-8000-000000000009",
+      "id": "4ae11e32-f5cc-481d-802b-501b40bd0c3e",
       "name": "SMG load token",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        400,
-        120
+        2816,
+        1600
       ],
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput",
       "credentials": {
         "postgres": {
           "id": "gZkWl3y38smseXUG",
           "name": "apartments-db"
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -212,18 +211,17 @@
         },
         "options": {}
       },
-      "id": "a21e0000-0000-4000-8000-00000000000a",
+      "id": "49cd8ae0-05f0-415a-b64d-1d0b021a73c7",
       "name": "SMG active?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        620,
-        120
+        3040,
+        1600
       ]
     },
     {
       "parameters": {
-        "method": "GET",
         "url": "=http://tls-fetch.n8n.svc.cluster.local:8080/fetch?url={{ encodeURIComponent($('SMG portal?').item.json.url) }}",
         "sendHeaders": true,
         "headerParameters": {
@@ -242,13 +240,13 @@
           "timeout": 35000
         }
       },
-      "id": "a21e0000-0000-4000-8000-00000000000b",
+      "id": "b963e646-5b33-4852-9afa-1b7ed98a68a7",
       "name": "SMG fetch",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        840,
-        60
+        3264,
+        1536
       ],
       "retryOnFail": false,
       "onError": "continueRegularOutput"
@@ -257,13 +255,13 @@
       "parameters": {
         "jsCode": "// APPT 21 \"SMG parse\" — enrich an SMG-pool listing (immoscout24 / homegate: same\n// Vue/Pinia frontend, window.__PINIA_INITIAL_STATE__.listing.listing) from its detail\n// page, fetched through tls-fetch WITH the replayed DataDome cookie. Also classifies\n// the result for the circuit breaker (see portal_cookies / tls-fetch README):\n//   200 → enrich + roll the token forward (_dd_new_status='active', _dd_refreshed=new)\n//   403 → cookie dead → _dd_blocked=true, _dd_new_status='expired' (NEVER retried; the\n//         breaker then stops all fetches for that portal until the user re-seeds it)\n//   other (timeout/5xx) → transient: leave token active, listing un-enriched, no alert.\nconst base = $('SMG portal?').item.json;\nconst portal = (base.source || '').replace('email-', '');\nconst resp = $json || {};\nconst status = Number(resp.status) || 0;\nconst html = typeof resp.body === 'string' ? resp.body : '';\n\nfunction out(extra) {\n  return [{ json: { ...base, _enriched: false, _portal: portal, _dd_status: status,\n    _dd_blocked: status === 403,\n    _dd_new_status: status === 403 ? 'expired' : 'active',\n    _dd_refreshed: '',\n    ...extra } }];\n}\nif (status !== 200 || !html) return out({ _enrich_note: 'fetch ' + (status || 'failed') });\n\n// live listing data lives in window.__PINIA_INITIAL_STATE__ (Vue/Pinia; note spaces around =)\nconst m = html.match(/window\\.__PINIA_INITIAL_STATE__\\s*=\\s*(\\{[\\s\\S]*?\\})\\s*<\\/script>/);\nif (!m) return out({ _enrich_note: 'no pinia state' });\nlet L;\ntry { L = JSON.parse(m[1]).listing.listing; } catch (e) { return out({ _enrich_note: 'pinia parse failed' }); }\nif (!L) return out({ _enrich_note: 'no listing object' });\n\nconst ch = L.characteristics || {};\nconst addr = L.address || {};\nconst geo = addr.geoCoordinates || {};\nconst rent = (L.prices && L.prices.rent) || {};\n\n// localization: prefer fr, then de/it/en\nconst loc = L.localization || {};\nconst lang = ['fr', 'de', 'it', 'en'].find(k => loc[k] && loc[k].text) || Object.keys(loc)[0];\nconst txt = (loc[lang] && loc[lang].text) || {};\nconst stripHtml = s => String(s || '').replace(/<br\\s*\\/?>/gi, '\\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/[ \\t]+\\n/g, '\\n').trim();\nconst title = txt.title || base.title;\nconst description = stripHtml(txt.description) || base.description;\n\n// images: localization.<lang>.attachments[] type IMAGE\nconst atts = (loc[lang] && Array.isArray(loc[lang].attachments)) ? loc[lang].attachments : [];\nconst images = atts.filter(a => a && a.type === 'IMAGE' && a.url).map(a => a.url).slice(0, 6);\n\n// rent: prices.rent.{net,gross,extra} are plain numbers on this platform (occasionally\n// wrapped as {amount}); fall back to a currency-anchored parse of the description text.\nconst money = v => { if (v == null) return null; const s = String(v).match(/(\\d[\\d'\\u2019 ]*)/); return s ? parseInt(s[1].replace(/['\\u2019 ]/g, ''), 10) : null; };\nconst amtOf = v => (v && typeof v === 'object') ? money(v.amount) : money(v);\nlet net = amtOf(rent.net);\nlet gross = amtOf(rent.gross);\nlet charges = amtOf(rent.extra);\nif (net == null && gross == null && description) {\n  // require an explicit currency marker (CHF / .- / fr) so a bare year like 2026\n  // in an availability date is not misread as the rent.\n  const mm = description.match(/chf\\s*(\\d[\\d'\\u2019 ]{2,})|(\\d[\\d'\\u2019 ]{2,})\\s*(?:\\.-|chf|frs?\\b)/i);\n  const amt = mm ? parseInt((mm[1] || mm[2]).replace(/['\\u2019 ]/g, ''), 10) : null;\n  if (amt && amt > 200 && amt < 20000) {\n    if (/charges?\\s*comprises?|inkl|incl|c\\.?c\\.?/i.test(description)) gross = amt; else net = amt;\n  }\n}\nif (charges == null && net != null && gross != null && gross > net) charges = gross - net;\n\nconst lister = L.lister || {};\nconst agency = lister.legalName || (L.listerBranding && L.listerBranding.legalName) || null;\nconst phone = lister.contacts && lister.contacts.inquiry && lister.contacts.inquiry.phone;\nconst street = (addr.street && addr.street !== addr.locality) ? addr.street : base.address_raw;\n\nreturn [{ json: {\n  ...base,\n  _enriched: true,\n  _enrich_note: null,\n  _portal: portal,\n  _dd_status: 200,\n  _dd_blocked: false,\n  _dd_new_status: 'active',\n  _dd_refreshed: resp.datadome || '',\n  title,\n  rent_net: net ?? base.rent_net,\n  rent_gross: gross ?? base.rent_gross,\n  charges: charges ?? base.charges,\n  rooms: ch.numberOfRooms != null ? Number(ch.numberOfRooms) : base.rooms,\n  m2: ch.livingSpace != null ? Number(ch.livingSpace) : base.m2,\n  commune: addr.locality || base.commune,\n  address_raw: street,\n  description,\n  images: images.length ? images : base.images,\n  lat: typeof geo.latitude === 'number' ? geo.latitude : null,\n  lng: typeof geo.longitude === 'number' ? geo.longitude : null,\n  agency,\n  agency_contact: phone || null,\n} }];\n"
       },
-      "id": "a21e0000-0000-4000-8000-00000000000c",
+      "id": "989e87fe-12c8-4c47-8f90-f91f68ff597c",
       "name": "SMG parse",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1060,
-        60
+        3472,
+        1536
       ]
     },
     {
@@ -274,21 +272,21 @@
           "queryReplacement": "={{ [ $json._dd_refreshed ?? '', $json._dd_new_status ?? 'active', $json._portal ?? '' ] }}"
         }
       },
-      "id": "a21e0000-0000-4000-8000-00000000000d",
+      "id": "b88493e1-8358-4b5a-be47-2288d93ccaee",
       "name": "SMG write token",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1280,
-        220
+        3696,
+        1696
       ],
-      "onError": "continueRegularOutput",
       "credentials": {
         "postgres": {
           "id": "gZkWl3y38smseXUG",
           "name": "apartments-db"
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -315,13 +313,13 @@
         },
         "options": {}
       },
-      "id": "a21e0000-0000-4000-8000-00000000000e",
+      "id": "30c5f555-c8f3-45a3-9344-75f510f6aff2",
       "name": "SMG blocked?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        1280,
-        380
+        3696,
+        1856
       ]
     },
     {
@@ -331,18 +329,17 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
-        "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ topic: 'homelab-appart', title: 'APPT 21: cookie ' + ($('SMG parse').item.json._portal || 'SMG') + ' expiré', message: 'Le cookie DataDome ' + ($('SMG parse').item.json._portal || 'SMG') + ' est expiré (403). Enrichissement suspendu pour ce portail jusqu\\u2019à recapture — voir productivity/n8n/tls-fetch/README.md.', priority: 4, tags: ['warning','closed_lock_with_key'] }) }}",
         "options": {}
       },
-      "id": "a21e0000-0000-4000-8000-00000000000f",
+      "id": "f0aa8957-3370-4dbd-90c7-507d8d7a9788",
       "name": "Notify cookie expired",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        1500,
-        380
+        3920,
+        1856
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -359,59 +356,72 @@
           "queryReplacement": "={{ [ $('SMG parse').item.json.agency ?? '' ] }}"
         }
       },
-      "id": "a21e0000-0000-4000-8000-000000000010",
+      "id": "2012881c-cb3b-419d-9f86-5175be1b87f4",
       "name": "SMG lookup agency",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1280,
-        60
+        3696,
+        1536
       ],
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput",
       "credentials": {
         "postgres": {
           "id": "gZkWl3y38smseXUG",
           "name": "apartments-db"
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "jsCode": "const listing = $('SMG parse').item.json;\nconst row = ($json && $json.reputation) ? $json : null;\nlet agency_reputation = null;\nif (row) agency_reputation = row.reputation + (row.note ? ' — ' + row.note : '');\n// strip the internal circuit-breaker fields before emitting downstream\nconst { _dd_status, _dd_blocked, _dd_new_status, _dd_refreshed, _portal, ...clean } = listing;\nreturn [{ json: { ...clean, agency_reputation } }];"
       },
-      "id": "a21e0000-0000-4000-8000-000000000011",
+      "id": "56bcc435-226e-4d89-8ab7-0cac1645951b",
       "name": "SMG attach reputation",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1500,
-        60
+        3920,
+        1536
       ]
     },
     {
       "parameters": {
         "jsCode": "// cookie inactive/expired → circuit breaker OPEN: make no request, pass the\n// email-sourced listing through un-enriched so it is still notified.\nreturn [{ json: { ...$('SMG portal?').item.json, _enriched: false, _enrich_note: 'SMG cookie inactive' } }];"
       },
-      "id": "a21e0000-0000-4000-8000-000000000012",
+      "id": "bd6220ad-79d5-4d39-9fce-a84231b50934",
       "name": "SMG skip",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        840,
-        260
+        3264,
+        1728
       ]
     },
     {
       "parameters": {},
-      "id": "a21e0000-0000-4000-8000-000000000007",
+      "id": "77527374-218d-40f2-b7a3-670e82722653",
       "name": "Emit",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        1760,
-        0
+        4176,
+        1472
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// The parent Execute-Workflow node receives the LAST executed node's data, and on\n// the blocked path that was the ntfy response — which then poisoned APPT 20's\n// triage/scoring (2026-07-19: Peer baseline died on the ntfy message id). Hand the\n// un-enriched listing back so the alert never becomes the workflow output.\nreturn [{ json: { ...$('SMG parse').item.json, _enrich_note: 'SMG cookie expired (403)' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4140,
+        1856
+      ],
+      "id": "smg-blocked-emit-0001",
+      "name": "SMG blocked emit"
     }
   ],
   "connections": {
@@ -550,11 +560,6 @@
       "main": [
         [
           {
-            "node": "SMG lookup agency",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "SMG write token",
             "type": "main",
             "index": 0
@@ -598,10 +603,38 @@
             "index": 0
           }
         ],
-        []
+        [
+          {
+            "node": "SMG lookup agency",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "SMG skip": {
+      "main": [
+        [
+          {
+            "node": "Emit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify cookie expired": {
+      "main": [
+        [
+          {
+            "node": "SMG blocked emit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMG blocked emit": {
       "main": [
         [
           {
@@ -615,7 +648,8 @@
   },
   "settings": {
     "executionOrder": "v1",
-    "errorWorkflow": "dyFmzyrigVEaC2eG"
+    "errorWorkflow": "dyFmzyrigVEaC2eG",
+    "binaryMode": "separate"
   },
   "meta": {
     "exportedFrom": "qfXSCe2gwT4C0UZx",
