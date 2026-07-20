@@ -12,8 +12,8 @@ controllers:
         - secretRef:
             name: deltabadger-secrets
         image:
-          pullPolicy: Always
-          tag: latest
+          pullPolicy: IfNotPresent
+          tag: 2.23.5
         resources:
           limits:
             cpu: 500m
