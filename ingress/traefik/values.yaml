@@ -42,9 +42,10 @@ ports:
 
 service:
   enabled: true
-  type: LoadBalancer
   # No metallb annotation yet — auto-assign during parallel run.
+  # Chart v40+: k8s-native ServiceSpec syntax, `type` lives under `spec`.
   spec:
+    type: LoadBalancer
     # Preserve real client IP: with MetalLB L2, ETP=Local makes the
     # elected node deliver to a local Traefik pod with no SNAT. Requires
     # ≥2 replicas spread across nodes (see topologySpreadConstraints).
@@ -56,11 +57,11 @@ ingressRoute:
   dashboard:
     enabled: false
 
-logs:
-  general:
-    level: INFO
-  access:
-    enabled: true
+# Chart v41+: `logs.general` → `log`, `logs.access` → `accessLog`.
+log:
+  level: INFO
+accessLog:
+  enabled: true
 
 metrics:
   prometheus:
