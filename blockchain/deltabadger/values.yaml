@@ -1,4 +1,4 @@
-# deltabadger — chart: k8s-charts/deltabadger v1.0.0 (bjw-s common library)
+# deltabadger — chart: k8s-charts/deltabadger v2.0.0 (bjw-s common library)
 # Real deployed values (source of truth for `helm upgrade -f values.yaml`).
 controllers:
   deltabadger:
