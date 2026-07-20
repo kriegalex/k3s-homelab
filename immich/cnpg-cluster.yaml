@@ -48,22 +48,13 @@ spec:
       memory: 1Gi
       cpu: 500m
 
-  backup:
-    barmanObjectStore:
-      destinationPath: "s3://immich-backups/"
-      endpointURL: "http://10.0.0.7:8010"
-      s3Credentials:
-        accessKeyId:
-          name: immich-s3-backup-credentials
-          key: ACCESS_KEY_ID
-        secretAccessKey:
-          name: immich-s3-backup-credentials
-          key: ACCESS_SECRET_KEY
-      wal:
-        compression: bzip2
-      data:
-        compression: bzip2
-    retentionPolicy: "30d"
+  # WAL archiving + base backups via plugin-barman-cloud (in-tree barmanObjectStore
+  # removed in CNPG 1.31). Store config: immich-objectstore.yaml.
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: immich-backup-store
 
   monitoring:
     enablePodMonitor: true
