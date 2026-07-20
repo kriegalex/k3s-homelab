@@ -6,6 +6,9 @@ metadata:
 spec:
   instances: 3
   primaryUpdateStrategy: unsupervised
+  # Pinned to the live webhook-defaulted image (was unpinned; the operator default
+  # can jump majors on upgrade, so pin explicitly like the other clusters).
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.5
 
   # Disable botocore flexible checksums. botocore >=1.36 (image 17.5 ships 1.40.x)
   # attaches x-amz-checksum-crc32 to every PUT/UploadPart, which the QNAP swift3
@@ -36,24 +39,15 @@ spec:
       memory: 1Gi
       cpu: 500m
       
-  # Backup configuration
-  backup:
-    retentionPolicy: "30d"
-    barmanObjectStore:
-      destinationPath: "s3://n8n-backups/"
-      endpointURL: "http://10.0.0.7:8010"
-      s3Credentials:
-        accessKeyId:
-          name: n8n-db-backup-credentials
-          key: ACCESS_KEY_ID
-        secretAccessKey:
-          name: n8n-db-backup-credentials
-          key: ACCESS_SECRET_KEY
-      wal:
-        compression: bzip2
-      data:
-        compression: bzip2
-      
+  # WAL archiving + base backups via plugin-barman-cloud (in-tree barmanObjectStore
+  # removed in CNPG 1.31). Store config: n8n-objectstore.yaml.
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: n8n-backup-store
+
+
   # Database initialization
   bootstrap:
     initdb:
