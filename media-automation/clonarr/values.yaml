@@ -7,7 +7,9 @@ controllers:
       app:
         image:
           repository: ghcr.io/prophetse7en/clonarr
-          pullPolicy: Always
+          pullPolicy: IfNotPresent
+          # Pin to the next tagged release once one lands newer than the
+          # running untagged `latest` build (newer than v2.0.6 as of 2026-07-20).
           tag: latest
         env:
           TZ: Europe/Paris
