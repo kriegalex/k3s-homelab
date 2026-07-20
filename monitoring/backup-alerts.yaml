@@ -12,8 +12,15 @@ spec:
       interval: 5m
       rules:
         - alert: CNPGBackupStale
+          # cnpg_collector_* = in-tree barman (frozen at migration), barman_cloud_* =
+          # plugin-barman-cloud sidecar. Must union via __name__ regex, NOT `or`: the
+          # frozen in-tree series shares the plugin series' labelset and `or` would
+          # shadow the fresh value. Drop the cnpg_collector name once all 5 clusters
+          # are migrated and the frozen series have aged out.
           expr: |
-            (time() - max by (job) (cnpg_collector_last_available_backup_timestamp)) > 691200
+            (time() - max by (job) (
+              {__name__=~"cnpg_collector_last_available_backup_timestamp|barman_cloud_cloudnative_pg_io_last_available_backup_timestamp"}
+            )) > 691200
           for: 30m
           labels:
             severity: warning
