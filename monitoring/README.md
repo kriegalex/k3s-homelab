@@ -2,7 +2,7 @@
 
 This guide covers installation of the complete Prometheus monitoring stack including Grafana dashboards. The stack includes Prometheus, Alertmanager, Grafana, and Kubernetes-specific exporters and dashboards.
 
-**Chart Version:** v63.1.0
+**Chart Version:** v87.17.0
 **Repository:** https://prometheus-community.github.io/helm-charts
 **Chart:** kube-prometheus-stack
 
@@ -77,7 +77,8 @@ helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
   --namespace monitoring \
   --create-namespace \
   -f values.yaml \
-  --version 63.1.0
+  --set-file grafana.dashboards.homelab.backup-overview.json=dashboards/backup-overview.json \
+  --version 87.17.0
 ```
 
 ### Step 3: Verify Installation
@@ -303,7 +304,8 @@ If you're migrating from the k3s-ansible `prometheus` role:
    helm upgrade prometheus prometheus-community/kube-prometheus-stack \
      --namespace monitoring \
      -f values.yaml \
-     --version 63.1.0
+     --set-file grafana.dashboards.homelab.backup-overview.json=dashboards/backup-overview.json \
+     --version 87.17.0
    ```
 
 4. **No data loss**: Prometheus data persists in PVCs and is not affected by Helm upgrade.
