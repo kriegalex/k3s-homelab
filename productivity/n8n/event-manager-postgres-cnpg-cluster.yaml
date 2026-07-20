@@ -36,19 +36,10 @@ spec:
   storage:
     size: 8Gi
     storageClass: longhorn-single-replica
-  backup:
-    barmanObjectStore:
-      destinationPath: "s3://event-manager-backups/"
-      endpointURL: "http://10.0.0.7:8010"
-      s3Credentials:
-        accessKeyId:
-          name: event-manager-s3-backup-credentials
-          key: ACCESS_KEY_ID
-        secretAccessKey:
-          name: event-manager-s3-backup-credentials
-          key: ACCESS_SECRET_KEY
-      wal:
-        compression: bzip2
-      data:
-        compression: bzip2
-    retentionPolicy: "30d"
+  # WAL archiving + base backups via plugin-barman-cloud (in-tree barmanObjectStore
+  # removed in CNPG 1.31). Store config: event-manager-objectstore.yaml.
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: event-manager-backup-store
