@@ -10,3 +10,7 @@ spec:
   cluster:
     name: nextcloud-db
   immediate: true
+  target: prefer-standby
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

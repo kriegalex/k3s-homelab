@@ -28,23 +28,14 @@ spec:
       memory: 1Gi
       cpu: 500m
 
-  backup:
-    retentionPolicy: "30d"
-    target: prefer-standby
-    barmanObjectStore:
-      destinationPath: "s3://nextcloud-backups/"
-      endpointURL: "http://10.0.0.7:8010"
-      s3Credentials:
-        accessKeyId:
-          name: nextcloud-s3-backup-credentials
-          key: ACCESS_KEY_ID
-        secretAccessKey:
-          name: nextcloud-s3-backup-credentials
-          key: ACCESS_SECRET_KEY
-      wal:
-        compression: bzip2
-      data:
-        compression: bzip2
+  # WAL archiving + base backups via plugin-barman-cloud (in-tree barmanObjectStore
+  # removed in CNPG 1.31). Store config: nextcloud-objectstore.yaml; the old
+  # backup.target: prefer-standby moved to the ScheduledBackup.
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: nextcloud-backup-store
 
   bootstrap:
     initdb:
