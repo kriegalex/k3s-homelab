@@ -1,0 +1,33 @@
+---
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: paperless-backup-store
+  namespace: paperless
+spec:
+  # Retention lives here in the plugin architecture (was Cluster .spec.backup.retentionPolicy).
+  retentionPolicy: "30d"
+  configuration:
+    destinationPath: "s3://paperless-backups/"
+    endpointURL: "http://10.0.0.7:8010"
+    s3Credentials:
+      accessKeyId:
+        name: paperless-s3-backup-credentials
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: paperless-s3-backup-credentials
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: bzip2
+    data:
+      compression: bzip2
+    # serverName intentionally omitted: must stay empty in an ObjectStore; the plugin
+    # defaults to the Cluster name, preserving the existing barman paths in the bucket.
+  instanceSidecarConfiguration:
+    # Disable botocore flexible checksums (botocore >=1.36); the QNAP swift3 S3
+    # gateway rejects x-amz-checksum-crc32 with InvalidDigest, breaking backups.
+    env:
+      - name: AWS_REQUEST_CHECKSUM_CALCULATION
+        value: when_required
+      - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+        value: when_required
