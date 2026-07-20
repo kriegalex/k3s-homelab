@@ -84,16 +84,23 @@ main:
 
 #### Database Backups
 
-The PostgreSQL cluster is configured to automatically back up to an S3-compatible storage. The configuration assumes:
+Both PostgreSQL clusters in this namespace back up to S3-compatible storage via the
+`barman-cloud.cloudnative-pg.io` plugin (in-tree `barmanObjectStore` is removed as of
+operator 1.31). Each cluster has its own `ObjectStore` CR committed beside this README:
 
-- An S3-compatible service is running at http://10.0.0.7:8010
-- A bucket named `n8n-backups` exists on this service
-- Credentials are provided through the `n8n-db-backup-credentials` secret
+| Cluster | ObjectStore CR | ObjectStore name | Bucket |
+|---|---|---|---|
+| `n8n-db` | [`n8n-objectstore.yaml`](n8n-objectstore.yaml) | `n8n-backup-store` | `s3://n8n-backups/` |
+| `event-manager-postgres` | [`event-manager-objectstore.yaml`](event-manager-objectstore.yaml) | `event-manager-backup-store` | `s3://event-manager-backups/` |
+
+Both point at the same S3-compatible service (`http://10.0.0.7:8010`) with a 30-day
+retention policy (`ObjectStore.spec.retentionPolicy`).
 
 Before deploying, make sure:
 1. The S3 service is accessible
 2. The bucket exists or can be auto-created
-3. You've created the secret with valid S3 credentials:
+3. You've created the credentials secret (`n8n-db-backup-credentials` /
+   `event-manager-s3-backup-credentials`):
 
 ```bash
 kubectl create secret generic n8n-db-backup-credentials -n n8n \
@@ -101,10 +108,19 @@ kubectl create secret generic n8n-db-backup-credentials -n n8n \
   --from-literal=ACCESS_SECRET_KEY=your_secret_key
 ```
 
+4. Apply the ObjectStore(s) before (or alongside) the cluster(s):
+
+```bash
+kubectl apply -f n8n-objectstore.yaml
+kubectl apply -f event-manager-objectstore.yaml
+```
+
 > **Note:** `n8n-db` and `event-manager-postgres` run a PostgreSQL `17.5` image whose
 > AWS SDK (botocore ≥ 1.36) sends a checksum the QNAP QuObjects S3 gateway rejects with
-> `InvalidDigest`, breaking backups. The cluster manifests set
-> `AWS_REQUEST_CHECKSUM_CALCULATION=when_required` (+ response validation) to work around it.
+> `InvalidDigest`, breaking backups. Both ObjectStores set
+> `AWS_REQUEST_CHECKSUM_CALCULATION=when_required` (+ response validation) on
+> `spec.instanceSidecarConfiguration.env` to work around it (also kept on the Cluster
+> `spec.env` as belt-and-braces).
 > See [database/cloudnative-pg/README.md](../../database/cloudnative-pg/README.md#backups-fail-with-invaliddigest-on-qnap-quobjects-newer-postgresql-images).
 
 #### Scheduled Backups
@@ -122,9 +138,14 @@ spec:
   cluster:
     name: n8n-db
   immediate: true
-  method: barmanObjectStore
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
   schedule: "0 4 0 ? * MON"  # Weekly on Mondays at 00:04 (Quartz cron format)
 ```
+
+Use the same shape with `cluster.name: event-manager-postgres` for the second
+cluster's scheduled backup.
 
 ```bash
 kubectl apply -f n8n-scheduled-backup.yaml
@@ -136,27 +157,32 @@ kubectl get scheduledbackup -n n8n
 To trigger an on-demand backup immediately:
 
 ```bash
-kubectl apply -f - <<EOF
-apiVersion: postgresql.cnpg.io/v1
-kind: Backup
-metadata:
-  name: n8n-db-backup-$(date +%Y%m%d-%H%M%S)
-  namespace: n8n
-spec:
-  cluster:
-    name: n8n-db
-  method: barmanObjectStore
-EOF
+kubectl cnpg backup n8n-db -n n8n \
+  --method=plugin --plugin-name=barman-cloud.cloudnative-pg.io
+
+# or for the second cluster:
+kubectl cnpg backup event-manager-postgres -n n8n \
+  --method=plugin --plugin-name=barman-cloud.cloudnative-pg.io
 ```
 
 Check backup status:
 
 ```bash
-# List all backups
-kubectl get backup -n n8n
+# List all backups (full CRD name — plain "backup" collides with Longhorn's CRD)
+kubectl get backups.postgresql.cnpg.io -n n8n
 
 # Inspect a specific backup
-kubectl describe backup <backup-name> -n n8n
+kubectl describe backups.postgresql.cnpg.io <backup-name> -n n8n
+```
+
+Backup health (recovery window, last success/failure per server):
+
+```bash
+kubectl get objectstore n8n-backup-store -n n8n \
+  -o jsonpath='{.status.serverRecoveryWindow}'
+kubectl get objectstore event-manager-backup-store -n n8n \
+  -o jsonpath='{.status.serverRecoveryWindow}'
+kubectl cnpg status n8n-db -n n8n
 ```
 
 #### Restore from Backup
@@ -181,7 +207,8 @@ This replaces the existing cluster with a fresh one bootstrapped from S3.
    kubectl delete pvc <pvc-name> -n n8n  # if needed
    ```
 
-4. Apply a new Cluster manifest that recovers from S3:
+4. Apply a new Cluster manifest that recovers from S3. Make sure the `n8n-backup-store`
+   ObjectStore (`n8n-objectstore.yaml`) already exists in the namespace:
    ```yaml
    apiVersion: postgresql.cnpg.io/v1
    kind: Cluster
@@ -198,19 +225,15 @@ This replaces the existing cluster with a fresh one bootstrapped from S3.
          source: n8n-db-backup
      externalClusters:
        - name: n8n-db-backup
-         barmanObjectStore:
-           destinationPath: "s3://n8n-backups/"
-           endpointURL: "http://10.0.0.7:8010"
-           s3Credentials:
-             accessKeyId:
-               name: n8n-db-backup-credentials
-               key: ACCESS_KEY_ID
-             secretAccessKey:
-               name: n8n-db-backup-credentials
-               key: ACCESS_SECRET_KEY
-           wal:
-             compression: bzip2
+         plugin:
+           name: barman-cloud.cloudnative-pg.io
+           parameters:
+             barmanObjectName: n8n-backup-store
+             serverName: n8n-db   # required: externalCluster name != barman server folder
    ```
+
+   For `event-manager-postgres`, use `barmanObjectName: event-manager-backup-store` and
+   `serverName: event-manager-postgres` instead.
 
 5. Wait for the cluster to become ready:
    ```bash

@@ -145,12 +145,12 @@ redis:
 
 ## Database Backups (CloudNativePG)
 
-The PostgreSQL cluster (`nextcloud-db`) is configured to automatically back up to S3-compatible storage:
+The PostgreSQL cluster (`nextcloud-db`) is configured to automatically back up to S3-compatible storage via the `barman-cloud.cloudnative-pg.io` plugin (in-tree `barmanObjectStore` is removed as of operator 1.31). The S3 target is the `ObjectStore` CR in [`nextcloud-objectstore.yaml`](nextcloud-objectstore.yaml):
 
 - S3 endpoint: `http://10.0.0.7:8010`
 - Bucket: `s3://nextcloud-backups/`
 - Credentials secret: `nextcloud-s3-backup-credentials`
-- Retention: 30 days
+- Retention: 30 days (`ObjectStore.spec.retentionPolicy`)
 
 Before deploying, create the credentials secret:
 
@@ -160,9 +160,15 @@ kubectl create secret generic nextcloud-s3-backup-credentials -n nextcloud \
   --from-literal=ACCESS_SECRET_KEY=your_secret_key
 ```
 
+Apply the ObjectStore before (or alongside) the cluster:
+
+```bash
+kubectl apply -f nextcloud-objectstore.yaml
+```
+
 ### Scheduled Backups
 
-Apply the weekly scheduled backup (Mondays at 00:04):
+Apply the weekly scheduled backup (Mondays at 00:04). `target: prefer-standby` now lives on the ScheduledBackup itself (there's no more Cluster-level `backup.target`):
 
 ```bash
 kubectl apply -f nextcloud-scheduled-backup.yaml
@@ -172,20 +178,19 @@ kubectl get scheduledbackup -n nextcloud
 ### Manual Backup
 
 ```bash
-kubectl apply -f - <<EOF
-apiVersion: postgresql.cnpg.io/v1
-kind: Backup
-metadata:
-  name: nextcloud-db-backup-$(date +%Y%m%d-%H%M%S)
-  namespace: nextcloud
-spec:
-  cluster:
-    name: nextcloud-db
-  method: barmanObjectStore
-EOF
+kubectl cnpg backup nextcloud-db -n nextcloud \
+  --method=plugin --plugin-name=barman-cloud.cloudnative-pg.io
 
-kubectl get backup -n nextcloud
-kubectl describe backup <backup-name> -n nextcloud
+kubectl get backups.postgresql.cnpg.io -n nextcloud
+kubectl describe backups.postgresql.cnpg.io <backup-name> -n nextcloud
+```
+
+### Backup Health
+
+```bash
+kubectl get objectstore nextcloud-backup-store -n nextcloud \
+  -o jsonpath='{.status.serverRecoveryWindow}'
+kubectl cnpg status nextcloud-db -n nextcloud
 ```
 
 ## (optional) Backup and restore existing docker

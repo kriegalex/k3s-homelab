@@ -100,12 +100,12 @@ kubectl delete pvc data-immich-postgresql-0
 
 ## Database Backups (CloudNativePG)
 
-The PostgreSQL cluster (`immich-db`) is configured to automatically back up to S3-compatible storage:
+The PostgreSQL cluster (`immich-db`) is configured to automatically back up to S3-compatible storage via the `barman-cloud.cloudnative-pg.io` plugin (in-tree `barmanObjectStore` is removed as of operator 1.31). The S3 target is the `ObjectStore` CR in [`immich-objectstore.yaml`](immich-objectstore.yaml):
 
 - S3 endpoint: `http://10.0.0.7:8010`
 - Bucket: `s3://immich-backups/`
 - Credentials secret: `immich-s3-backup-credentials`
-- Retention: 30 days
+- Retention: 30 days (`ObjectStore.spec.retentionPolicy`)
 
 Before deploying, create the credentials secret:
 
@@ -113,6 +113,12 @@ Before deploying, create the credentials secret:
 kubectl create secret generic immich-s3-backup-credentials -n immich \
   --from-literal=ACCESS_KEY_ID=your_access_key \
   --from-literal=ACCESS_SECRET_KEY=your_secret_key
+```
+
+Apply the ObjectStore before (or alongside) the cluster:
+
+```bash
+kubectl apply -f immich-objectstore.yaml
 ```
 
 ### Scheduled Backups
@@ -127,23 +133,22 @@ kubectl get scheduledbackup -n immich
 ### Manual Backup
 
 ```bash
-kubectl apply -f - <<EOF
-apiVersion: postgresql.cnpg.io/v1
-kind: Backup
-metadata:
-  name: immich-db-backup-$(date +%Y%m%d-%H%M%S)
-  namespace: immich
-spec:
-  cluster:
-    name: immich-db
-  method: barmanObjectStore
-EOF
+kubectl cnpg backup immich-db -n immich \
+  --method=plugin --plugin-name=barman-cloud.cloudnative-pg.io
 
-kubectl get backup -n immich
-kubectl describe backup <backup-name> -n immich
+kubectl get backups.postgresql.cnpg.io -n immich
+kubectl describe backups.postgresql.cnpg.io <backup-name> -n immich
 ```
 
-> **Note:** Immich uses a custom PostgreSQL image (`cloudnative-vectorchord`) with special extensions. CNPG bootstrap recovery is **not supported** for restore — use the `pg_dumpall` method below instead. The S3 backup still provides WAL archiving and point-in-time protection.
+### Backup Health
+
+```bash
+kubectl get objectstore immich-backup-store -n immich \
+  -o jsonpath='{.status.serverRecoveryWindow}'
+kubectl cnpg status immich-db -n immich
+```
+
+> **Note:** Immich uses a custom PostgreSQL image (`cloudnative-vectorchord`) with special extensions. CNPG bootstrap recovery is **not supported** for restore — use the `pg_dumpall` method below instead. The plugin-managed S3 backup still provides WAL archiving and point-in-time protection.
 
 ## Backup & Restore
 

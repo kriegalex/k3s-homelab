@@ -148,12 +148,12 @@ kubectl -n paperless delete -f paperless-media-pvc.yaml -f paperless-media-pv.ya
 
 ## Database Backups (CloudNativePG)
 
-The PostgreSQL cluster (`paperless-db`) is configured to automatically back up to S3-compatible storage:
+The PostgreSQL cluster (`paperless-db`) is configured to automatically back up to S3-compatible storage via the `barman-cloud.cloudnative-pg.io` plugin (in-tree `barmanObjectStore` is removed as of operator 1.31). The S3 target is the `ObjectStore` CR in [`paperless-objectstore.yaml`](paperless-objectstore.yaml):
 
 - S3 endpoint: `http://10.0.0.7:8010`
 - Bucket: `s3://paperless-backups/`
 - Credentials secret: `paperless-s3-backup-credentials`
-- Retention: 30 days
+- Retention: 30 days (`ObjectStore.spec.retentionPolicy`)
 
 Before deploying, create the credentials secret:
 
@@ -163,9 +163,15 @@ kubectl create secret generic paperless-s3-backup-credentials -n paperless \
   --from-literal=ACCESS_SECRET_KEY=your_secret_key
 ```
 
+Apply the ObjectStore before (or alongside) the cluster:
+
+```bash
+kubectl apply -f paperless-objectstore.yaml
+```
+
 ### Scheduled Backups
 
-Apply the weekly scheduled backup (Mondays at 00:04):
+Apply the weekly scheduled backup (Mondays at 00:34). `target: prefer-standby` now lives on the ScheduledBackup itself (there's no more Cluster-level `backup.target`):
 
 ```bash
 kubectl apply -f paperless-scheduled-backup.yaml
@@ -175,20 +181,19 @@ kubectl get scheduledbackup -n paperless
 ### Manual Backup
 
 ```bash
-kubectl apply -f - <<EOF
-apiVersion: postgresql.cnpg.io/v1
-kind: Backup
-metadata:
-  name: paperless-db-backup-$(date +%Y%m%d-%H%M%S)
-  namespace: paperless
-spec:
-  cluster:
-    name: paperless-db
-  method: barmanObjectStore
-EOF
+kubectl cnpg backup paperless-db -n paperless \
+  --method=plugin --plugin-name=barman-cloud.cloudnative-pg.io
 
-kubectl get backup -n paperless
-kubectl describe backup <backup-name> -n paperless
+kubectl get backups.postgresql.cnpg.io -n paperless
+kubectl describe backups.postgresql.cnpg.io <backup-name> -n paperless
+```
+
+### Backup Health
+
+```bash
+kubectl get objectstore paperless-backup-store -n paperless \
+  -o jsonpath='{.status.serverRecoveryWindow}'
+kubectl cnpg status paperless-db -n paperless
 ```
 
 ## Backup / restore (application-level)

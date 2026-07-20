@@ -88,7 +88,7 @@ helm upgrade --install cnpg cnpg/cloudnative-pg \
   --namespace cnpg-system \
   --create-namespace \
   -f values.yaml \
-  --version 0.23.2
+  --version 0.29.0
 ```
 
 ### Step 3: Verify Installation
@@ -247,43 +247,65 @@ kubectl get cluster myapp-cluster -n default -o yaml
 
 ## Backup and Restore
 
-CloudNativePG uses Barman for backup management with S3-compatible storage.
+CloudNativePG delegates backup/restore to the `barman-cloud.cloudnative-pg.io` CNPG-I
+plugin. In-tree `.spec.backup.barmanObjectStore` is deprecated since 1.26 and removed
+in operator 1.31.0 — every cluster here now backs up through the plugin. The plugin
+operator itself is installed separately; see
+[`database/plugin-barman-cloud/README.md`](../plugin-barman-cloud/README.md).
+
+Each cluster's S3 target is a standalone `ObjectStore` CR (`barmancloud.cnpg.io/v1`),
+committed beside the Cluster manifest, not inline in `spec.backup`.
 
 ### Step 1: Configure S3 Credentials
 
-See `example-backup-config.yaml` for complete configuration.
-
 ```bash
-# Create S3 credentials secret
 kubectl create secret generic backup-s3-credentials \
   --from-literal=ACCESS_KEY_ID="your-access-key" \
-  --from-literal=SECRET_ACCESS_KEY="your-secret-key" \
+  --from-literal=ACCESS_SECRET_KEY="your-secret-key" \
   --namespace=default
 ```
 
-### Step 2: Enable Backups in Cluster
+### Step 2: Create an ObjectStore
 
-Add backup configuration to your Cluster manifest:
+```yaml
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: myapp-backup-store
+  namespace: default
+spec:
+  # Retention lives here (top level), not under Cluster.spec.backup.
+  retentionPolicy: "30d"
+  configuration:
+    destinationPath: s3://my-bucket/postgres-backups
+    endpointURL: https://s3.amazonaws.com
+    s3Credentials:
+      accessKeyId:
+        name: backup-s3-credentials
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: backup-s3-credentials
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip
+    data:
+      compression: gzip
+    # serverName intentionally omitted: it must stay empty in an ObjectStore — the
+    # plugin defaults to the Cluster name.
+```
+
+### Step 3: Point the Cluster at the ObjectStore
 
 ```yaml
 spec:
-  backup:
-    barmanObjectStore:
-      destinationPath: s3://my-bucket/postgres-backups
-      endpointURL: https://s3.amazonaws.com
-      s3Credentials:
-        accessKeyId:
-          name: backup-s3-credentials
-          key: ACCESS_KEY_ID
-        secretAccessKey:
-          name: backup-s3-credentials
-          key: SECRET_ACCESS_KEY
-      wal:
-        compression: gzip
-    retentionPolicy: "30d"
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: myapp-backup-store
 ```
 
-### Step 3: Schedule Automated Backups
+### Step 4: Schedule Automated Backups
 
 ```yaml
 apiVersion: postgresql.cnpg.io/v1
@@ -295,32 +317,23 @@ spec:
   schedule: "30 2 * * *"  # Daily at 2:30 AM
   cluster:
     name: myapp-cluster
-  method: barmanObjectStore
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
 ```
 
 ### Manual Backup
 
 ```bash
 # Trigger immediate backup
-kubectl apply -f - <<EOF
-apiVersion: postgresql.cnpg.io/v1
-kind: Backup
-metadata:
-  name: myapp-cluster-backup-$(date +%Y%m%d-%H%M%S)
-  namespace: default
-spec:
-  cluster:
-    name: myapp-cluster
-  method: barmanObjectStore
-EOF
+kubectl cnpg backup myapp-cluster -n default \
+  --method=plugin --plugin-name=barman-cloud.cloudnative-pg.io
 
-# Check backup status
-kubectl get backup -n default
+# Check backup status (full CRD name — plain "backup" collides with Longhorn's CRD)
+kubectl get backups.postgresql.cnpg.io -n default
 ```
 
 ### Restore from Backup
-
-See `example-backup-config.yaml` for complete restore example.
 
 ```yaml
 apiVersion: postgresql.cnpg.io/v1
@@ -337,17 +350,45 @@ spec:
 
   externalClusters:
     - name: myapp-cluster
-      barmanObjectStore:
-        destinationPath: s3://my-bucket/postgres-backups
-        endpointURL: https://s3.amazonaws.com
-        s3Credentials:
-          accessKeyId:
-            name: backup-s3-credentials
-            key: ACCESS_KEY_ID
-          secretAccessKey:
-            name: backup-s3-credentials
-            key: SECRET_ACCESS_KEY
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: myapp-backup-store
+          serverName: myapp-cluster   # required when externalCluster name != barman server folder
 ```
+
+For point-in-time recovery, add `recoveryTarget` under `bootstrap.recovery` exactly as
+before:
+
+```yaml
+    bootstrap:
+      recovery:
+        source: myapp-cluster
+        recoveryTarget:
+          targetTime: "2026-02-24 03:00:00"  # UTC timestamp
+```
+
+### Check Backup Health
+
+The Cluster's `.status.lastSuccessfulBackup` / `.status.firstRecoverabilityPoint` and
+the `cnpg_collector_*backup*` metrics are **frozen** at their pre-migration values —
+use these instead:
+
+```bash
+# Recovery window (first/last successful backup, last failure) per server
+kubectl get objectstore myapp-backup-store -n default \
+  -o jsonpath='{.status.serverRecoveryWindow}'
+
+# Backup CR status
+kubectl get backups.postgresql.cnpg.io -n default
+
+# "Continuous Backup status (Barman Cloud Plugin)" section
+kubectl cnpg status myapp-cluster -n default
+```
+
+Prometheus metrics: `barman_cloud_cloudnative_pg_io_last_available_backup_timestamp`,
+`barman_cloud_cloudnative_pg_io_last_failed_backup_timestamp`,
+`barman_cloud_cloudnative_pg_io_first_recoverability_point`.
 
 ## High Availability
 
@@ -473,9 +514,9 @@ kubectl logs myapp-cluster-1 -n default
 ### Backup Failures
 
 ```bash
-# Check backup status
-kubectl get backup -n default
-kubectl describe backup myapp-cluster-backup-20240208 -n default
+# Check backup status (full CRD name — plain "backup" collides with Longhorn's CRD)
+kubectl get backups.postgresql.cnpg.io -n default
+kubectl describe backups.postgresql.cnpg.io myapp-cluster-backup-20240208 -n default
 
 # Check S3 credentials
 kubectl get secret backup-s3-credentials -n default -o yaml
@@ -517,7 +558,25 @@ The Content-MD5 or checksum value that you specified is not valid.
 
 > ⚠️ **Time bomb:** any cluster upgraded to a botocore-≥1.36 image will start failing the same way. Apply the fix below at the same time you bump the image.
 
-**Fix** — tell the SDK not to send the new checksum, via two env vars on the `Cluster` spec:
+**Fix** — tell the SDK not to send the new checksum. With the plugin architecture the
+actual S3 calls run in the plugin's sidecar container, so the env vars belong on the
+`ObjectStore`'s `instanceSidecarConfiguration`:
+
+```yaml
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: myapp-backup-store
+spec:
+  instanceSidecarConfiguration:
+    env:
+      - name: AWS_REQUEST_CHECKSUM_CALCULATION
+        value: when_required
+      - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+        value: when_required
+```
+
+They're also kept on the `Cluster` spec as belt-and-braces:
 
 ```yaml
 spec:
@@ -587,7 +646,7 @@ If you're migrating from the k3s-ansible `cloudnative_pg` role:
 | Ansible role deploys operator | Manual Helm install |
 | Variables in `defaults/main.yaml` | Helm values in `values.yaml` |
 | Clusters created via Ansible templates | Manual Cluster CRD application |
-| Chart version: 0.23.0 | Live version: 0.23.2 |
+| Chart version: 0.23.0 | Live version: 0.29.0 |
 
 ### Migration Steps
 
@@ -597,7 +656,7 @@ If you're migrating from the k3s-ansible `cloudnative_pg` role:
      --namespace cnpg-system \
      --create-namespace \
      -f values.yaml \
-     --version 0.23.2
+     --version 0.29.0
    ```
 
 2. **Existing clusters remain unchanged**: CloudNativePG clusters are CRDs managed by the operator, not by Helm. Your existing PostgreSQL clusters will continue running.
@@ -623,7 +682,7 @@ cloudnative_pg_namespace: cnpg-system
 # k8s-homelab (helm command)
 helm upgrade --install cnpg cnpg/cloudnative-pg \
   --namespace cnpg-system \
-  --version 0.23.2
+  --version 0.29.0
 ```
 
 ## Additional Resources
