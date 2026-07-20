@@ -3,7 +3,7 @@
 image:
   repository: nextcloud
   flavor: fpm
-  tag: 32.0.5-fpm
+  tag: 34.0.1-fpm
   pullPolicy: IfNotPresent
 
 # Number of replicas to be deployed
@@ -55,6 +55,16 @@ nextcloud:
 nginx:
   ## You need to set an fpm version of the image for nextcloud if you want to use nginx!
   enabled: true
+  config:
+    # Chart 9.1+ shrank the default upload cap to 512M — keep the old 10G.
+    # NB: fastcgi_request_buffering is hardcoded `on` in the 9.2 template
+    # (was `off` in 9.0); chunked client uploads are unaffected, but huge
+    # single-PUT WebDAV uploads now spool via the nginx container disk.
+    serverBlockCustom: |
+      client_max_body_size 10G;
+      client_body_timeout 300s;
+      fastcgi_buffers 64 4K;
+      fastcgi_read_timeout 3600s;
 
 internalDatabase:
   enabled: false
@@ -237,8 +247,16 @@ readinessProbe:
   timeoutSeconds: 5
   failureThreshold: 3
   successThreshold: 1
+# Startup probe gates liveness/readiness while the image entrypoint rsyncs a
+# new release and runs `occ upgrade` (minutes on app-major hops) — without it
+# the liveness probe kills the container ~40s into the migration.
 startupProbe:
-  enabled: false
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 60
+  successThreshold: 1
 
 affinity:
   nodeAffinity:
