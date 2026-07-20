@@ -1,7 +1,7 @@
 
 image:
-  tag: latest
-  pullPolicy: Always
+  tag: 26.7.0
+  pullPolicy: IfNotPresent
   repository: actualbudget/actual-server
 
 # Persistent storage settings for data.

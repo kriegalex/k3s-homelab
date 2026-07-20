@@ -1,7 +1,7 @@
 image:
   repository: ghcr.io/alam00000/bentopdf-simple
-  pullPolicy: Always
-  tag: latest
+  pullPolicy: IfNotPresent
+  tag: v1.15.4
 
 ingress:
   enabled: true
