@@ -15,8 +15,11 @@ spec:
     - name: AWS_RESPONSE_CHECKSUM_VALIDATION
       value: when_required
 
-  # Using the tensorchord image with pgvecto.rs
-  imageName: ghcr.io/tensorchord/cloudnative-vectorchord:16.8-0.3.0
+  # Tensorchord image with VectorChord; keep the vchord version aligned with the
+  # one immich's own docker-compose pins for the deployed immich release
+  # (v2.7.5 pins vectorchord 0.4.3). After bumping: ALTER EXTENSION vchord UPDATE;
+  # REINDEX INDEX face_index; REINDEX INDEX clip_index;
+  imageName: ghcr.io/tensorchord/cloudnative-vectorchord:16.9-0.4.3
   
   # https://github.com/tensorchord/cloudnative-pgvecto.rs
   postgresql:
