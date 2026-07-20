@@ -60,6 +60,7 @@ declare -A MANUAL_MAPPINGS=(
     ["longhorn"]="storage/longhorn"
     ["prometheus"]="monitoring"
     ["cnpg"]="database/cloudnative-pg"
+    ["plugin-barman-cloud"]="database/plugin-barman-cloud"
     ["ntfy"]="monitoring/ntfy"
     ["alertmanager-ntfy"]="monitoring/alertmanager-ntfy"
     ["deltabadger"]="blockchain/deltabadger"

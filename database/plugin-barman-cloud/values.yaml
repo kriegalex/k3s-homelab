@@ -1,0 +1,10 @@
+# plugin-barman-cloud — CNPG-I Barman Cloud backup plugin for CloudNativePG.
+# Chart: cnpg/plugin-barman-cloud (version pinned on the helm command line, see README).
+# Must be installed in cnpg-system (same namespace as the CNPG operator).
+#
+# Chart defaults are correct for this cluster and intentionally kept:
+# - crds.create: true            (installs the ObjectStore CRD)
+# - certificate.*                (cert-manager self-signed issuer + client/server certs)
+# - service.name: barman-cloud   (fixed upstream — used in certificate SANs, do not change)
+# - replicaCount: 1              (plugin operator only supports the Recreate strategy)
+replicaCount: 1
