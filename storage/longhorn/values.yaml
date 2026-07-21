@@ -10,6 +10,17 @@ defaultBackupStore:
   backupTarget: s3://longhorn@ch-fr-1/
   backupTargetCredentialSecret: minio-bucket-credentials
 
+# Intentional non-default settings (Longhorn best-practices review 2026-07-20).
+# Encoded here so a cluster rebuild reproduces them; previously default-replica-count=2
+# was UI-set drift.
+defaultSettings:
+  defaultReplicaCount: 2  # UI-created volumes only; StorageClasses pin their own count
+  allowVolumeCreationWithDegradedAvailability: false
+  replicaAutoBalance: least-effort
+  # Auto-clean orphaned replica data dirs / instances (grace 300s; never touches
+  # orphans on down/unknown nodes)
+  orphanResourceAutoDeletion: "replica-data;instance"
+
 # Ingress configuration for Longhorn UI
 ingress:
   enabled: true

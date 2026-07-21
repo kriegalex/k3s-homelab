@@ -170,19 +170,15 @@ Set `enabled: true` if using Kubernetes network policies. The `type: "k3s"` opti
 
 ### Ingress Configuration
 
-```yaml
-ingress:
-  enabled: false                        # Set to true to expose UI via ingress
-  ingressClassName: traefik
-  host: longhorn.yourdomain.com         # CHANGE_ME
-  tls: false                            # Set to true to enable TLS
-  tlsSecret: longhorn-tls
-  path: /
-  annotations: {}
-    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
-```
+The UI ingress is **chart-managed** via `values.yaml` (`ingress.enabled: true`, host
+`longhorn.k3s.home`, plain HTTP, LAN-only — the domain does not resolve publicly).
+The former standalone `ingress-longhorn-ui.yaml` manifest was never deployed and was
+removed 2026-07-20.
 
-**Note:** We recommend using the separate `ingress-longhorn-ui.yaml` manifest instead of Helm ingress for better control.
+**Security note:** the Longhorn UI has no authentication of its own and grants full
+volume/backup admin. It is only as protected as LAN access to 10.0.0.20. If that ever
+changes, chain a basic-auth Traefik middleware (`ingress/traefik/middlewares/`) via
+`ingress.annotations`.
 
 ## Usage
 
@@ -452,32 +448,20 @@ kubectl port-forward -n longhorn-system svc/longhorn-frontend 8080:80
 # Access at: http://localhost:8080
 ```
 
-### Option 2: Ingress with TLS (Production)
+### Option 2: Chart-managed Ingress (Deployed)
 
-Edit `ingress-longhorn-ui.yaml`:
-
-```yaml
-spec:
-  tls:
-  - hosts:
-    - longhorn.yourdomain.com  # CHANGE_ME
-    secretName: longhorn-ui-tls
-  rules:
-  - host: longhorn.yourdomain.com  # CHANGE_ME
-```
-
-Apply the ingress:
+The live ingress comes from `values.yaml` (`ingress.enabled: true`): host
+`longhorn.k3s.home`, plain HTTP, resolvable on the LAN only.
 
 ```bash
-kubectl apply -f ingress-longhorn-ui.yaml
-
 # Verify ingress
 kubectl get ingress -n longhorn-system
 
-# Access at: https://longhorn.yourdomain.com
+# Access at: http://longhorn.k3s.home
 ```
 
-**Security recommendation:** Add authentication to the ingress (basic auth, oauth2-proxy, etc.):
+**Security recommendation** if the UI ever needs more than LAN-perimeter protection —
+add authentication via `ingress.annotations` in `values.yaml` (basic auth, oauth2-proxy, etc.):
 
 ```yaml
 metadata:
