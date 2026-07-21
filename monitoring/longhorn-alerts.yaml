@@ -1,0 +1,74 @@
+---
+# Longhorn health alerts (best-practices review 2026-07-20).
+# Complements LonghornBackupFailed in backup-alerts.yaml (longhorn_backup_state == 4).
+# Metric shapes verified against the live 1.11.3 exporter:
+#   - longhorn_volume_robustness is a per-state boolean gauge
+#     (state="healthy|degraded|faulted|unknown", value 0/1), NOT a 0-3 enum.
+#   - longhorn_disk_health / longhorn_volume_file_system_read_only are documented but
+#     NOT exported by 1.11.3 — do not add rules for them.
+# Backup/snapshot staleness is alerted via the recurring jobs' CronJobs in
+# longhorn-system (kube-state-metrics), not longhorn_volume_last_backup_at: that
+# per-volume metric also covers untier-ed volumes (CNPG et al., backed up via barman)
+# which would permanently fire once the 2026-07-18 pre-upgrade system backup ages out.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: longhorn-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: longhorn-health
+      interval: 1m
+      rules:
+        - alert: LonghornVolumeFaulted
+          expr: longhorn_volume_robustness{state="faulted"} == 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Longhorn volume {{ $labels.pvc_namespace }}/{{ $labels.pvc }} is faulted"
+            description: "Volume {{ $labels.volume }} has no functional replica left. Do not detach/delete anything; investigate replicas and consider restore from backup."
+
+        - alert: LonghornVolumeDegraded
+          expr: longhorn_volume_robustness{state="degraded"} == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Longhorn volume {{ $labels.pvc_namespace }}/{{ $labels.pvc }} is degraded"
+            description: "Volume {{ $labels.volume }} has fewer healthy replicas than requested for 15m (rebuild not progressing or node/disk issue)."
+
+        - alert: LonghornNodeStorageFull
+          expr: |
+            longhorn_node_storage_usage_bytes / longhorn_node_storage_capacity_bytes > 0.75
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Longhorn disk on {{ $labels.node }} is {{ $value | humanizePercentage }} full"
+            description: "Above 75% used, free space approaches the 25% minimal-available floor where the disk becomes unschedulable for new replicas. Data path shares the root FS with the OS."
+
+    - name: longhorn-recurring-jobs
+      interval: 5m
+      rules:
+        - alert: LonghornRecurringBackupStale
+          expr: |
+            time() - kube_cronjob_status_last_successful_time{namespace="longhorn-system", cronjob=~"weekly-backup-.*"} > 691200
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Longhorn recurring backup {{ $labels.cronjob }} has not succeeded in >8d"
+            description: "Weekly backup job last succeeded {{ $value | humanizeDuration }} ago. Check the job pods in longhorn-system and the QNAP S3 backup target."
+
+        - alert: LonghornRecurringSnapshotStale
+          expr: |
+            time() - kube_cronjob_status_last_successful_time{namespace="longhorn-system", cronjob=~"(hourly|daily)-snapshot-.*"} > 93600
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Longhorn recurring snapshot {{ $labels.cronjob }} has not succeeded in >26h"
+            description: "Snapshot job last succeeded {{ $value | humanizeDuration }} ago; on-cluster recovery points are going stale."
