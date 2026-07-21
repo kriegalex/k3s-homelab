@@ -22,3 +22,19 @@ server:
   description: ""
   name: Serveur Ramelemouche
   players: 8
+
+# Game settings — the container regenerates PalWorldSettings.ini from these env
+# vars on every boot; hand-edits to the ini on the PVC do not survive a restart.
+extraEnv:
+  - name: EXP_RATE
+    value: "0.9"
+  - name: PAL_CAPTURE_RATE
+    value: "0.75"
+  - name: PLAYER_DAMAGE_RATE_DEFENSE
+    value: "0.9"
+  - name: PAL_SPAWN_NUM_RATE
+    value: "0.9"
+  - name: PAL_AUTO_HP_REGEN_RATE
+    value: "0.9"
+  - name: PAL_EGG_DEFAULT_HATCHING_TIME
+    value: "2.5"
