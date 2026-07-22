@@ -212,6 +212,11 @@ alertmanager:
       routes:
         - matchers: [alertname = "Watchdog"]
           receiver: "null"
+        # InfoInhibitor carries severity=none, so the severity=info route
+        # below misses it; null it by name (as upstream's stock config does).
+        # Its only purpose is an inhibit rule this config doesn't define.
+        - matchers: [alertname = "InfoInhibitor"]
+          receiver: "null"
         - matchers: [severity = "info"]
           receiver: "null"
         - matchers: [severity = "critical"]
