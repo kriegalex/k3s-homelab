@@ -14,6 +14,51 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "t1",
+              "leftValue": "={{ $json.workflow.id === 't8pFNBjIKH0FKvTW' && $json.trigger && $json.trigger.error && ['econnreset', 'etimedout', 'epipe', 'socket hang up', 'connection closed unexpectedly', 'closed the connection without reporting an error'].some(s => ((($json.trigger.error.message || '') + ' ' + ($json.trigger.error.description || '')).toLowerCase()).includes(s)) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a90e0000-0000-4000-8000-0000000000f1",
+      "name": "Transient IMAP error?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        110,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "a90e0000-0000-4000-8000-0000000000f2",
+      "name": "Drop (auto-reactivates)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        220,
+        -180
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "http://ntfy.ntfy.svc.cluster.local/homelab-k3s",
         "authentication": "genericCredentialType",
@@ -42,7 +87,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "text/plain",
-        "body": "={{ ($json.execution && $json.execution.error ? $json.execution.error.message : ($json.trigger && $json.trigger.error ? $json.trigger.error.message : 'unknown error')) + ' | node: ' + ($json.execution ? $json.execution.lastNodeExecuted : 'trigger') }}",
+        "body": "={{ ($json.execution && $json.execution.error ? $json.execution.error.message : ($json.trigger && $json.trigger.error ? ($json.trigger.error.message + ($json.trigger.error.description ? ' — ' + $json.trigger.error.description : '')) : 'unknown error')) + ' | node: ' + ($json.execution ? $json.execution.lastNodeExecuted : 'trigger') }}",
         "options": {}
       },
       "id": "a90e0000-0000-4000-8000-000000000002",
@@ -50,7 +95,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        220,
+        330,
         0
       ],
       "credentials": {
@@ -64,6 +109,24 @@
   "connections": {
     "Error Trigger": {
       "main": [
+        [
+          {
+            "node": "Transient IMAP error?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transient IMAP error?": {
+      "main": [
+        [
+          {
+            "node": "Drop (auto-reactivates)",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Notify ntfy",

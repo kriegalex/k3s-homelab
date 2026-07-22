@@ -6,9 +6,7 @@
         "mailbox": "Appart-Bulle",
         "postProcessAction": "read",
         "format": "simple",
-        "options": {
-          "forceReconnect": 60
-        }
+        "options": {}
       },
       "id": "a15e0000-0000-4000-8000-000000000001",
       "name": "Email Trigger (IMAP)",
