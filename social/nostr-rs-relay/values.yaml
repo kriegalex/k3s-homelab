@@ -83,8 +83,12 @@ resources:
 persistence:
   # -- Enable persistent storage for the database
   enabled: true
-  # -- Size of the persistent volume
-  size: 50Gi
+  # -- Size of the persistent volume.
+  # Expanded 50Gi -> 100Gi on 2026-07-25: reclaiming the gift-wrap flood needed
+  # a VACUUM, which rewrites the whole DB and so needs room for the new copy
+  # alongside the old (only 5.1 GB was free at 90% full). Post-purge the DB is
+  # ~24 GB. Longhorn cannot shrink a volume, so this is one-way.
+  size: 100Gi
   # -- StorageClass name. If empty, uses the default provisioner.
   storageClass: "longhorn"
   # -- Access mode for the persistent volume
@@ -183,8 +187,18 @@ config:
     # db_conns_per_client: 0
     # -- Limit blocking threads used for database connections
     # max_blocking_threads: 16
-    # -- Limit the maximum size of an EVENT message in bytes
-    # max_event_bytes: 131072
+    # -- Limit the maximum size of an EVENT message in bytes.
+    # Lowered from the 128 KB default to 64 KB on 2026-07-25 after a
+    # May-June 2026 gift-wrap (kind 1059) flood grew nostr.db to 44 GB and
+    # filled the 50Gi PVC to 90%. 45% of June gift wraps were >=64 KB,
+    # clustered at the 128 KB ceiling -- i.e. bulk payloads inlined into
+    # encrypted events, not chat. Normal NIP-17 DMs are 1-2 KB and media is
+    # referenced by URL (external hosts / Blossom), never inlined, so this
+    # cap affects neither messaging nor image sharing.
+    # 65536 is the protocol-safe floor: NIP-44 v2 permits up to 65535 bytes
+    # of plaintext, so anything at or above this is already out of spec.
+    # See claude-docs/nostr-giftwrap-purge.md.
+    max_event_bytes: 65536
     # -- Maximum WebSocket message in bytes
     # max_ws_message_bytes: 131072
     # -- Maximum WebSocket frame size in bytes
