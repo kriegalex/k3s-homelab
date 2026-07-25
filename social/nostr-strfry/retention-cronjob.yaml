@@ -1,0 +1,131 @@
+---
+# Gift-wrap retention for strfry.
+#
+# WHY: kind 1059 (NIP-59 gift wrap) is a *delivery buffer*, not an archive — it
+# exists so an offline recipient can collect a DM later. But NIP-01 puts 1059 in
+# the 1000-9999 "regular" range, so relays are expected to store it forever, and
+# NIP-40 expiry is opt-in that almost nobody sets (measured 2026-07-25: 2,644 of
+# 4.75 M events, 0.06%). Result: DMs accumulate without bound. A May-June 2026
+# flood put ~2 M gift wraps on this relay (48% of all events) and pushed the PVC
+# to 73%. See claude-docs/nostr-giftwrap-purge.md.
+#
+# maxEventSize=65536 (already set in values.yaml) caps each event but does NOT
+# bound the count — strfry still absorbed 1.23 M gift wraps in June alone, more
+# than nostr-rs-relay did. Retention is the part that actually bounds growth.
+#
+# Everything that is NOT a gift wrap (notes, profiles, contacts, reactions,
+# long-form) is kept forever — that is the content with archival value.
+#
+# NOTE: deletes free LMDB pages for reuse but do NOT shrink data.mdb. The file
+# stays at its high-water mark and the relay grows into the free space. To
+# actually return disk you must `strfry compact <out>` and swap, which needs
+# room for the new file alongside the old — deliberately not done here.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: strfry-retention
+  namespace: nostr
+---
+# Least privilege: namespaced Role (not ClusterRole) so this can only ever exec
+# into pods in `nostr`. It needs pods/exec because strfry's dbutils operate on
+# the LMDB directly and must run inside the relay container — the volume is RWO
+# and LMDB tolerates only a single writer, so a second pod mounting it is not an
+# option.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: strfry-retention
+  namespace: nostr
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: strfry-retention
+  namespace: nostr
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: strfry-retention
+subjects:
+  - kind: ServiceAccount
+    name: strfry-retention
+    namespace: nostr
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: strfry-giftwrap-retention
+  namespace: nostr
+spec:
+  # Daily, off-peak. Steady state deletes only ~1 day of gift wraps, which is
+  # fast; the expensive part was the one-off backfill done by hand on 2026-07-25.
+  schedule: "15 4 * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      # Generous: the first large sweep took minutes and holds the LMDB write
+      # lock throughout. Steady-state runs finish in seconds.
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: strfry-retention
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+          containers:
+            - name: retention
+              # alpine/k8s = alpine + kubectl. Same image/pinning convention as
+              # storage/nfs-healer — bump the tag on cluster upgrade.
+              image: alpine/k8s:1.31.6
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -u
+                  # 30 days. strfry --age takes PLAIN SECONDS; "30d" is rejected
+                  # with "contains non-numeric characters".
+                  AGE=2592000
+                  FILTER='{"kinds":[1059]}'
+
+                  POD=$(kubectl -n nostr get pods \
+                        -l app.kubernetes.io/name=nostr-strfry \
+                        --field-selector=status.phase=Running \
+                        -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+                  if [ -z "$POD" ]; then
+                    echo "no running strfry pod; nothing to do"
+                    exit 0
+                  fi
+
+                  # Guard: a kubectl exec that detaches does NOT kill the remote
+                  # process (learned the hard way 2026-07-25 — the client
+                  # returned while `delete` kept running for minutes). If a
+                  # sweep is still in flight, skip rather than stack a second
+                  # writer against the LMDB lock.
+                  # stderr is silenced because the HEALTHY path is a non-zero
+                  # exit: `grep -q` returns 1 when no delete is running, and
+                  # kubectl then prints "command terminated with exit code 1",
+                  # which reads like a failure in the Job log but is not one.
+                  if kubectl -n nostr exec "$POD" -- sh -c \
+                       'ps ax 2>/dev/null | grep -v grep | grep -q "strfry.*delete"' 2>/dev/null; then
+                    echo "a strfry delete is already running in $POD; skipping this sweep"
+                    exit 0
+                  fi
+
+                  echo "pruning gift wraps older than ${AGE}s from $POD"
+                  kubectl -n nostr exec "$POD" -- sh -c \
+                    "cd /app && ./strfry --config=/etc/strfry.conf delete --age=$AGE --filter '$FILTER'"
+                  echo "retention sweep complete"
+              resources:
+                requests: { cpu: "20m", memory: "48Mi" }
+                limits: { cpu: "200m", memory: "128Mi" }
