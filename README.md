@@ -44,7 +44,7 @@ Application deployments organized by category:
   - [nextcloud](productivity/nextcloud/), [paperless-ngx](productivity/paperless-ngx/)
   - [actual-budget](productivity/actual-budget/), [n8n](productivity/n8n/)
 - **Media Services:** [plex](plex/), [jellyfin](jellyfin/), [immich](immich/)
-- **Social:** [bluesky-pds](social/bluesky-pds/), [nostr-rs-relay](social/nostr-rs-relay/), [nostr-strfry](social/nostr-strfry/)
+- **Social:** [bluesky-pds](social/bluesky-pds/), [nostr-strfry](social/nostr-strfry/)
 - **Blockchain:** [deltabadger](blockchain/deltabadger/)
 - **Utilities:** [bentopdf](bentopdf/)
 
@@ -53,6 +53,7 @@ Application deployments organized by category:
 Directories exist in this repo but nothing is running in-cluster for these:
 
 - [k8up](backup/k8up/) - Restic backup operator (superseded by the backup posture above)
+- [nostr-rs-relay](social/nostr-rs-relay/) - SQLite nostr relay (decommissioned 2026-07-26, consolidated onto strfry; kept as a template)
 - [pihole](pihole/) - DNS ad-blocking
 - [redis](redis/) - standalone cache layer
 - [gitea](productivity/gitea/) - Git hosting (a separate Gitea runs on a Pi instead)
