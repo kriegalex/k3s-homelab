@@ -38,3 +38,5 @@ extraEnv:
     value: "0.9"
   - name: PAL_EGG_DEFAULT_HATCHING_TIME
     value: "2.5"
+  - name: BASE_CAMP_MAX_NUM_IN_GUILD
+    value: "10"
