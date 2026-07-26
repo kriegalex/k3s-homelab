@@ -13,6 +13,17 @@
 # bound the count — strfry still absorbed 1.23 M gift wraps in June alone, more
 # than nostr-rs-relay did. Retention is the part that actually bounds growth.
 #
+# OWN-DM EXEMPTION (added 2026-07-26): a plain `delete --filter {"kinds":[1059]}`
+# also deletes the operator's OWN incoming DMs after 30 days. strfry filters are
+# purely positive — there is no "except mine" — so this job exports the gift
+# wraps p-tagged to the operator, runs the delete, then re-imports them. The
+# export lands on the PVC, so a pod restart mid-sweep cannot lose them: the next
+# run restores the keep-file before doing anything else.
+#
+# The operator pubkey is PII and never committed (same rule as the NIP-11 `self`
+# npub) — it comes from the `strfry-retention-keep` Secret. If that Secret is
+# missing the pod fails to start, which fails CLOSED: no delete runs unprotected.
+#
 # Everything that is NOT a gift wrap (notes, profiles, contacts, reactions,
 # long-form) is kept forever — that is the content with archival value.
 #
@@ -89,6 +100,15 @@ spec:
               # alpine/k8s = alpine + kubectl. Same image/pinning convention as
               # storage/nfs-healer — bump the tag on cluster upgrade.
               image: alpine/k8s:1.31.6
+              env:
+                # Operator pubkey (64-char hex, NOT npub) whose incoming DMs are
+                # exempt from retention. PII — lives only in this Secret.
+                # See secrets-template.yaml for the create command.
+                - name: MYPK
+                  valueFrom:
+                    secretKeyRef:
+                      name: strfry-retention-keep
+                      key: pubkey
               command: ["/bin/sh", "-c"]
               args:
                 - |
@@ -97,6 +117,20 @@ spec:
                   # with "contains non-numeric characters".
                   AGE=2592000
                   FILTER='{"kinds":[1059]}'
+                  # Keep-file lives on the relay PVC, not in this pod, so it
+                  # survives a crash between delete and re-import.
+                  KEEP=/app/strfry-db/.retention-keep.jsonl
+                  # Prefix for every remote command; strfry must run from /app.
+                  CD="cd /app"
+                  SF="./strfry --config=/etc/strfry.conf"
+
+                  # Fail closed. An empty/garbage pubkey would silently export
+                  # nothing and let the delete eat the operator's own DMs.
+                  if ! echo "$MYPK" | grep -qE '^[0-9a-f]{64}$'; then
+                    echo "MYPK is not 64-char lowercase hex (npub is NOT accepted); refusing to run"
+                    exit 1
+                  fi
+                  MINE="{\"kinds\":[1059],\"#p\":[\"$MYPK\"]}"
 
                   POD=$(kubectl -n nostr get pods \
                         -l app.kubernetes.io/name=nostr-strfry \
@@ -122,9 +156,37 @@ spec:
                     exit 0
                   fi
 
+                  # STEP 0 — restore a keep-file left behind by a previous run
+                  # that died after the delete. Re-importing events the relay
+                  # already has is a no-op, so this is safe every time.
+                  kubectl -n nostr exec "$POD" -- sh -c \
+                    "$CD && if [ -s $KEEP ]; then \
+                       echo \"restoring \$(wc -l < $KEEP) kept gift wrap(s)\"; \
+                       $SF import < $KEEP; \
+                     fi" || { echo "restore step failed; refusing to delete"; exit 1; }
+
+                  # STEP 1 — export the operator's own gift wraps. Write to a
+                  # .new file and only promote it once the export succeeded, so
+                  # a failed scan can never blank out a good keep-file.
+                  kubectl -n nostr exec "$POD" -- sh -c \
+                    "$CD && $SF scan '$MINE' \
+                       > $KEEP.new 2>/dev/null && mv $KEEP.new $KEEP" \
+                    || { echo "export of own DMs failed; refusing to delete"; exit 1; }
+                  KEPT=$(kubectl -n nostr exec "$POD" -- sh -c "wc -l < $KEEP" 2>/dev/null | tr -d ' \r')
+                  echo "exempting ${KEPT:-0} of my own gift wrap(s) from this sweep"
+
+                  # STEP 2 — the actual retention delete.
                   echo "pruning gift wraps older than ${AGE}s from $POD"
                   kubectl -n nostr exec "$POD" -- sh -c \
-                    "cd /app && ./strfry --config=/etc/strfry.conf delete --age=$AGE --filter '$FILTER'"
+                    "$CD && $SF delete --age=$AGE --filter '$FILTER'" \
+                    || { echo "delete failed; keep-file retained for next run"; exit 1; }
+
+                  # STEP 3 — put the operator's own DMs back.
+                  kubectl -n nostr exec "$POD" -- sh -c \
+                    "$CD && if [ -s $KEEP ]; then \
+                       $SF import < $KEEP; \
+                     fi" || { echo "re-import FAILED — keep-file is still at $KEEP on the PVC"; exit 1; }
+
                   echo "retention sweep complete"
               resources:
                 requests: { cpu: "20m", memory: "48Mi" }
