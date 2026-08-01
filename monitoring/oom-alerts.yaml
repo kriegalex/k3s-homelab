@@ -1,0 +1,48 @@
+---
+# Cluster-wide OOM detection.
+#
+# Motivating case (2026-08-01): qbit-media was OOM-killed 7 times over ~22h while
+# `kubectl get pods` showed RESTARTS 0 the whole time. The kernel killed
+# qbittorrent-nox inside the cgroup and the container's s6 supervisor restarted it
+# in place, so PID 1 never died and no pod-level signal existed. Nothing alerted.
+#
+# Hence the primary rule keys on container_oom_events_total (cAdvisor, counts
+# cgroup oom_kill events) rather than on restart counts or
+# kube_pod_container_status_last_terminated_reason — those only see kills that
+# take down PID 1.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: oom-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus   # required, or the Prometheus CR silently ignores this rule
+spec:
+  groups:
+    - name: container.oom
+      interval: 1m
+      rules:
+        # Fires on any cgroup OOM kill, whether or not the pod restarted.
+        # increase() over 1h keeps it firing for an hour after the event, which is
+        # long enough to be noticed but self-resolves without manual clearing.
+        - alert: ContainerOOMKilled
+          expr: increase(container_oom_events_total{container!=""}[1h]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "OOM kill in {{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container }})"
+            description: "{{ $value | printf \"%.0f\" }} OOM kill(s) in the last hour. Note the pod may still show RESTARTS 0 if the container supervisor restarted the process in place — check container logs for a fresh startup banner."
+
+        # Early warning so the limit can be raised (or the workload tuned) before
+        # the kernel steps in. 15m avoids paging on short allocation spikes.
+        - alert: ContainerMemoryNearLimit
+          expr: |
+            sum by (namespace,pod,container) (container_memory_working_set_bytes{container!=""})
+            / sum by (namespace,pod,container) (kube_pod_container_resource_limits{resource="memory"})
+            > 0.90
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container }}) at {{ $value | humanizePercentage }} of its memory limit"
+            description: "Working set has been above 90% of the container memory limit for 15m. An OOM kill is likely if this continues."
