@@ -157,6 +157,42 @@ kubectl logs qbit-qbittorrent-POD_NAME
 
 Replace POD_NAME by the name of your pod (`kubectl get pods`).
 
+## Memory tuning (disk cache)
+
+qBittorrent 4.3.9 / libtorrent 1.2 sizes its disk cache from the **node's** physical
+RAM (worker4 has 31 GiB) when `disk_cache` is left at `-1` (auto) — it has no idea the
+container limit is 6 GiB. With `QueueingEnabled=false` and 1300+ torrents, qbit-media
+idled at ~1.35 GiB working set and ballooned past 5 GiB under sustained disk I/O,
+producing 7 OOM kills over 2026-07-31/08-01. The pod showed `RESTARTS 0` throughout:
+the kernel killed `qbittorrent-nox` inside the cgroup and s6 restarted it in place, so
+PID 1 never died and nothing alerted (fixed by `monitoring/oom-alerts.yaml`).
+
+**Pin the cache explicitly** rather than relying on auto. This setting lives on the
+config PVC (`/config/config/qBittorrent.conf` → `Downloads\DiskWriteCacheSize`), not in
+`values.yaml`, so it is not captured by the Helm source-of-truth convention. Set it via
+the WebUI API — that applies live and persists, no restart needed:
+
+```bash
+kubectl --context=default exec -n media <qbit-pod> -c qbittorrent -- \
+  curl -s -X POST "http://localhost:8080/api/v2/app/setPreferences" \
+  --data-urlencode 'json={"disk_cache":1024}'
+```
+
+`LocalHostAuth=false` means no credentials are needed from inside the pod.
+
+Current state:
+
+| release | limit | `disk_cache` | queueing | torrents |
+|---|---|---|---|---|
+| qbit-media | 6Gi | **1024 MiB** (pinned 2026-08-01) | disabled | ~1318 |
+| qbit-anime | 4Gi | `-1` (auto) | enabled, 200 active | ~221 |
+
+qbit-anime is still on auto but has never OOM'd — queueing caps its concurrency and it
+sits flat at ~1.15 GiB. Pin it too if it ever starts spiking.
+
+Note: `checking_memory_use` (default 32 MiB) is the *recheck* buffer — raising it
+increases memory use, so leave it alone when chasing OOMs.
+
 ## Port Forwarding
 
 The port forwarding should be handled automatically by the docker image, if the correct environment variables have been set.
