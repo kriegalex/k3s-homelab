@@ -86,10 +86,14 @@ ingress:
           pathType: ImplementationSpecific
   tls: []
 
+# 8Gi (was 6Gi, 2026-08-01): RSS sits at a flat ~1.3Gi (metadata for ~1350 seeded
+# torrents) but kernel page cache expands to ~4.6Gi, parking the cgroup ~150Mi under
+# the old 6Gi cap. Import bursts create dirty NFS pages that reclaim can't drain in
+# time, so the cgroup OOM-kills qbittorrent-nox (s6 respawns it, pod RESTARTS stays 0).
 resources:
   limits:
     cpu: 1
-    memory: 6Gi
+    memory: 8Gi
   requests:
     cpu: 250m
     memory: 1Gi
