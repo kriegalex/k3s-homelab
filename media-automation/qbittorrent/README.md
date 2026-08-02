@@ -160,12 +160,13 @@ Replace POD_NAME by the name of your pod (`kubectl get pods`).
 ## Memory tuning (disk cache)
 
 qBittorrent 4.3.9 / libtorrent 1.2 sizes its disk cache from the **node's** physical
-RAM (worker4 has 31 GiB) when `disk_cache` is left at `-1` (auto) — it has no idea the
-container limit is 6 GiB. With `QueueingEnabled=false` and 1300+ torrents, qbit-media
-idled at ~1.35 GiB working set and ballooned past 5 GiB under sustained disk I/O,
-producing 7 OOM kills over 2026-07-31/08-01. The pod showed `RESTARTS 0` throughout:
-the kernel killed `qbittorrent-nox` inside the cgroup and s6 restarted it in place, so
-PID 1 never died and nothing alerted (fixed by `monitoring/oom-alerts.yaml`).
+RAM (worker4 has 31 GiB) when `disk_cache` is left at `-1` (auto) — it does not see
+the container memory limit. On a busy instance (queueing disabled, 1300+ torrents)
+the working set balloons under sustained disk I/O until the kernel OOM-kills
+`qbittorrent-nox` inside the cgroup. Beware: s6 restarts the process in place, so the
+pod keeps showing `RESTARTS 0` and nothing surfaces in `kubectl get pods` — OOM kills
+are only visible via `container_oom_events_total` (alerted by
+`monitoring/oom-alerts.yaml`).
 
 **Pin the cache explicitly** rather than relying on auto. This setting lives on the
 config PVC (`/config/config/qBittorrent.conf` → `Downloads\DiskWriteCacheSize`), not in
@@ -184,10 +185,10 @@ Current state:
 
 | release | limit | `disk_cache` | queueing | torrents |
 |---|---|---|---|---|
-| qbit-media | 6Gi | **1024 MiB** (pinned 2026-08-01) | disabled | ~1318 |
+| qbit-media | 8Gi | **1024 MiB** (pinned) | disabled | ~1318 |
 | qbit-anime | 4Gi | `-1` (auto) | enabled, 200 active | ~221 |
 
-qbit-anime is still on auto but has never OOM'd — queueing caps its concurrency and it
+qbit-anime is on auto but has never OOM'd — queueing caps its concurrency and it
 sits flat at ~1.15 GiB. Pin it too if it ever starts spiking.
 
 Note: `checking_memory_use` (default 32 MiB) is the *recheck* buffer — raising it

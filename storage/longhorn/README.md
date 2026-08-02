@@ -75,7 +75,7 @@ helm upgrade --install longhorn longhorn/longhorn \
   -f values.yaml
 ```
 
-**Chart version note:** This deployment uses Longhorn 1.11.3 (upgraded 1.8.1 → 1.9.2 → 1.10.2 → 1.11.3 on 2026-07-19; one minor at a time is mandatory). Check [Longhorn releases](https://github.com/longhorn/longhorn/releases) for the latest stable version.
+**Chart version note:** the `--version` pin above is the deployed version. Longhorn upgrades MUST go one minor version at a time (skipping minors is unsupported). Check [Longhorn releases](https://github.com/longhorn/longhorn/releases) for the latest stable version.
 
 ### Step 3: Verify Installation
 
@@ -172,8 +172,6 @@ Set `enabled: true` if using Kubernetes network policies. The `type: "k3s"` opti
 
 The UI ingress is **chart-managed** via `values.yaml` (`ingress.enabled: true`, host
 `longhorn.k3s.home`, plain HTTP, LAN-only — the domain does not resolve publicly).
-The former standalone `ingress-longhorn-ui.yaml` manifest was never deployed and was
-removed 2026-07-20.
 
 **Security note:** the Longhorn UI has no authentication of its own and grants full
 volume/backup admin. It is only as protected as LAN access to 10.0.0.20. If that ever

@@ -57,8 +57,8 @@ kubectl -n ntfy create secret generic ntfy-web-push-email \
   --from-literal=NTFY_WEB_PUSH_EMAIL_ADDRESS='<your-admin-email>'   # shown in VAPID contact info
 ```
 
-(Real domain/baseURL/ingress hosts are committed directly in `values.yaml`
-since the 2026-06-26 source-of-truth inversion — no override layer needed.)
+(Real domain/baseURL/ingress hosts are committed directly in `values.yaml` —
+the committed file is the exact one passed to Helm; no override layer.)
 
 ### Files in this folder
 

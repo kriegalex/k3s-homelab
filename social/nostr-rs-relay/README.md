@@ -322,13 +322,12 @@ only global DB-concurrency cap on SQLite is `config.database.max_conn`
 (default 8); lowering it throttles legitimate readers too, so only
 consider it if spikes persist after `limit_scrapers`.
 
-Note: as of 2026-05-18 the relay sees real client IPs again. The Traefik
-Service was moved to `externalTrafficPolicy=Local` (MetalLB L2), so the
-real client IP is no longer SNAT'd, and `config.network.remote_ip_header:
-x-forwarded-for` is enabled so the relay reads the real IP from Traefik's
-X-Forwarded-For. Per-IP limits and meaningful access logs are now
-possible; see `claude-docs/traefik-client-ip.md`. `limit_scrapers` works
-regardless of source IP, so the read-spike mitigation is independent.
+The relay sees real client IPs: the Traefik Service runs with
+`externalTrafficPolicy=Local` (MetalLB L2), so the client IP is not
+SNAT'd, and `config.network.remote_ip_header: x-forwarded-for` makes the
+relay read it from Traefik's X-Forwarded-For header. This enables per-IP
+limits and meaningful access logs. `limit_scrapers` works regardless of
+source IP, so the read-spike mitigation is independent.
 
 ## Monitoring
 
