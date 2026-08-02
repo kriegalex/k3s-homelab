@@ -36,7 +36,11 @@ extraEnv:
     value: "0.9"
   - name: PAL_AUTO_HP_REGEN_RATE
     value: "0.9"
-  - name: PAL_EGG_DEFAULT_HATCHING_TIME
-    value: "2.5"
+  # - name: PAL_EGG_DEFAULT_HATCHING_TIME
+  #   value: "2.5"
   - name: BASE_CAMP_MAX_NUM_IN_GUILD
     value: "10"
+  - name: BUILD_OBJECT_DAMAGE_RATE
+    value: "1.0"
+  - name: BUILD_OBJECT_DETERIORATION_DAMAGE_RATE
+    value: "0.0"
