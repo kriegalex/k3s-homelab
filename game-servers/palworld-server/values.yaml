@@ -19,6 +19,11 @@ server:
   adminPassword: ""
   password: ""
   community: true
+  # Crossplay disabled: restrict to Steam only (chart default is
+  # "(Steam,Xbox,PS5,Mac)"). See thijsvanloef/palworld-server-docker README,
+  # CROSSPLAY_PLATFORMS env var — Palworld has no separate on/off flag, the
+  # platform list itself is the crossplay control.
+  crossplayPlatforms: (Steam)
   description: ""
   name: Serveur Ramelemouche
   players: 8
