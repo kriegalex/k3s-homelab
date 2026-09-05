@@ -1,4 +1,4 @@
-# plex-media-server — chart: plex/plex-media-server v1.5.0. Real deployed values (source of truth).
+# plex-media-server — chart: plex/plex-media-server v1.6.0. Real deployed values (source of truth).
 affinity:
   nodeAffinity:
     preferredDuringSchedulingIgnoredDuringExecution:
@@ -35,7 +35,7 @@ image:
   pullPolicy: IfNotPresent
   registry: index.docker.io
   repository: plexinc/pms-docker
-  tag: 1.43.2.10687-563d026ea
+  tag: 1.43.3.10896-cb3ebc72d
 ingress:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
