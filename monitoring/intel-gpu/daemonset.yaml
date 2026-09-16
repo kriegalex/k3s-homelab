@@ -49,12 +49,13 @@ spec:
           protocol: TCP
         securityContext:
           privileged: true
+        # No CPU limit: usage averages ~15m but arrives in sub-100ms bursts
+        # each sample interval, which a 200m CFS quota throttled 25-45%.
         resources:
           requests:
             cpu: 50m
             memory: 64Mi
           limits:
-            cpu: 200m
             memory: 128Mi
         volumeMounts:
         - name: dev-dri
