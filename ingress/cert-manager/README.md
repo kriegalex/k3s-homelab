@@ -76,11 +76,11 @@ kubectl wait --namespace cert-manager \
 
 ### DNS Resolution Settings
 
-The `values.yaml` configures cert-manager to use public DNS servers for DNS-01 challenge validation:
+The `values.yaml` makes cert-manager check DNS-01 challenges against public resolvers over DNS-over-HTTPS:
 
 ```yaml
 extraArgs:
-  - --dns01-recursive-nameservers=1.1.1.1:53,8.8.8.8:53
+  - --dns01-recursive-nameservers=https://1.1.1.1/dns-query,https://8.8.8.8/dns-query
   - --dns01-recursive-nameservers-only
 podDnsPolicy: None
 podDnsConfig:
@@ -90,9 +90,10 @@ podDnsConfig:
 ```
 
 **Why this matters:**
-- Ensures cert-manager can validate DNS challenges even if cluster DNS is internal-only
-- Prevents issues with split-horizon DNS configurations
-- Required for reliable Let's Encrypt DNS-01 challenges
+- The LAN router answers every query sent to port 53, whatever server it is addressed to, from its own cache. A plain `1.1.1.1:53` check therefore reads the router's cache, not Cloudflare's.
+- Before checking the TXT record, cert-manager looks up and follows any CNAME at `_acme-challenge.<host>`. The zone's wildcard `*.lourenco.ch CNAME` answers that lookup until the challenge record exists, and the router caches the answer for the record's TTL (an hour). The check then looks for the TXT at `lourenco.myddns.me` and reports "not yet propagated" until the cache expires.
+- DNS-over-HTTPS (`https://` nameservers, RFC 8484, accepted by cert-manager 1.21) cannot be intercepted by the router, so the check sees the real public answer.
+- `--dns01-recursive-nameservers-only` keeps the check on those resolvers instead of querying the authoritative nameservers over port 53.
 
 ## DNS Provider Setup
 
