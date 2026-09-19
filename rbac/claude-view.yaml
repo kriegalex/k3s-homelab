@@ -1,0 +1,150 @@
+# Read-only, no-Secrets identity for AI agents (Claude Code).
+#
+# The agent's default kubeconfig (~/.kube/claude-view.yaml) authenticates as this
+# ServiceAccount, so secret exposure is refused by the API server instead of by
+# command-text matching. Deliberately NOT granted: secrets, pods/exec,
+# pods/portforward, nodes/proxy, helmcharts.helm.cattle.io (valuesContent can
+# carry credentials), bgppeers.metallb.io (inline password), hub.traefik.io.
+#
+# Apply (admin kubeconfig; Claude sessions default to the view-only one):
+#         kubectl --kubeconfig ~/.kube/config --context=default apply -f rbac/claude-view.yaml
+# Then:   ~/.claude/skills/k3s-homelab/scripts/make-view-kubeconfig.sh
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: claude-agent
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: claude-view
+  namespace: claude-agent
+---
+# Long-lived token; revoke by deleting this Secret.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: claude-view-token
+  namespace: claude-agent
+  annotations:
+    kubernetes.io/service-account.name: claude-view
+type: kubernetes.io/service-account-token
+---
+# Built-in `view` excludes Secrets by design.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: claude-view
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: claude-view
+    namespace: claude-agent
+---
+# Cluster-scoped objects and CRDs that `view` does not aggregate.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: claude-view-extra
+rules:
+  - apiGroups: [""]
+    resources: [nodes, persistentvolumes]
+    verbs: [get, list, watch]
+  - apiGroups: [storage.k8s.io]
+    resources: [storageclasses, volumeattachments, csidrivers, csinodes, csistoragecapacities]
+    verbs: [get, list, watch]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list, watch]
+  - apiGroups: [apiregistration.k8s.io]
+    resources: [apiservices]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingressclasses]
+    verbs: [get, list, watch]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings, clusterroles, clusterrolebindings]
+    verbs: [get, list, watch]
+  - apiGroups: [admissionregistration.k8s.io]
+    resources: [validatingwebhookconfigurations, mutatingwebhookconfigurations]
+    verbs: [get, list, watch]
+  - apiGroups: [scheduling.k8s.io]
+    resources: [priorityclasses]
+    verbs: [get, list, watch]
+  - apiGroups: [node.k8s.io]
+    resources: [runtimeclasses]
+    verbs: [get, list, watch]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch]
+  - apiGroups:
+      - longhorn.io
+      - postgresql.cnpg.io
+      - barmancloud.cnpg.io
+      - traefik.io
+      - monitoring.coreos.com
+      - gateway.networking.k8s.io
+      - cert-manager.io
+      - acme.cert-manager.io
+      - nfd.k8s-sigs.io
+      - k3s.cattle.io
+    resources: ["*"]
+    verbs: [get, list, watch]
+  - apiGroups: [metallb.io]
+    resources:
+      - ipaddresspools
+      - l2advertisements
+      - bgpadvertisements
+      - communities
+      - bfdprofiles
+      - servicel2statuses
+      - servicebgpstatuses
+    verbs: [get, list, watch]
+  - nonResourceURLs: ["/healthz", "/healthz/*", "/livez", "/livez/*", "/readyz", "/readyz/*"]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: claude-view-extra
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: claude-view-extra
+subjects:
+  - kind: ServiceAccount
+    name: claude-view
+    namespace: claude-agent
+---
+# PromQL / Alertmanager reads through the apiserver proxy (GET only, so no
+# silences or admin API writes).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: claude-view-metrics-proxy
+  namespace: monitoring
+rules:
+  - apiGroups: [""]
+    resources: [services/proxy]
+    resourceNames:
+      - prometheus-kube-prometheus-prometheus:9090
+      - prometheus-kube-prometheus-alertmanager:9093
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: claude-view-metrics-proxy
+  namespace: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: claude-view-metrics-proxy
+subjects:
+  - kind: ServiceAccount
+    name: claude-view
+    namespace: claude-agent
