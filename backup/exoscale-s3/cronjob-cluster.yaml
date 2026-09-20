@@ -1,0 +1,131 @@
+---
+# Off-site copy of the CLUSTER-side backups — the seven CNPG buckets and the
+# etcd snapshots — to Exoscale SOS, alongside the user-data job in cronjob.yaml.
+#
+# WHY THIS EXISTS (review-2026-09-19, finding B-2, ranked #1):
+# Every cluster-side backup converges on one QNAP: all seven CNPG ObjectStores
+# (s3://<app>-backups at http://10.0.0.7:8010), the Longhorn backup target, and
+# the etcd snapshots. That box takes NO volume snapshots, has NO replication
+# (HBS 3 unconfigured), and one of its four disks has already lost data
+# (519 uncorrectable sectors). A second on-site copy was declined on disk cost.
+#
+# The consequence that makes this urgent is not "we lose the databases" — it is
+# that the EXISTING off-site job (cronjob.yaml) copies payload FILES ONLY:
+# immich photos, nextcloud files, paperless scans. Every Postgres database is
+# QNAP-only. So losing that array leaves an off-site copy that is metadata-blind:
+#   immich     -> photo blobs survive, albums/faces/places/timeline are gone
+#   nextcloud  -> file blobs survive, shares/tags/the file tree are gone
+#   paperless  -> scans survive, OCR text/tags/correspondents are gone
+#   n8n, event-manager, dealwatch, vigie -> lost outright
+# The CNPG buckets are ~1 GB in total (backup-strategy.md), so closing that hole
+# costs a few cents a month. This is the cheapest high-value item in the review.
+#
+# SOURCE IS S3, NOT NFS. Reading the QNAP's S3 endpoint avoids mounting shares
+# from a box that is about to be rebuilt, and keeps working if the buckets move.
+# Requires a [qnap-s3] remote in the rclone.conf Secret — see README "QNAP S3
+# remote" for the section shape and the Secret regeneration command.
+#
+# ETCD COMES FROM THE SOURCE, NOT THE QNAP COPY. The snapshots are read via
+# hostPath from k3s-server1 itself, which is why this job is pinned to the
+# control-plane node. That deliberately bypasses the QNAP: an etcd snapshot
+# copied from a failing array is worth less than one taken from the origin.
+# NOTE: a snapshot contains every unencrypted Secret in the cluster (k3s docs),
+# which is exactly why it must go through `crypt` and never to a plain bucket.
+#
+# Mode is `rclone copy` — additive, NEVER deletes on the destination — so a
+# corrupted or truncated source cannot propagate and destroy the off-site copy.
+# NOTE this is a property of the MODE, not of the bucket: the Exoscale key still
+# has full control (finding B-4). Enable bucket versioning; it is free and it is
+# what makes this copy survive its own credentials.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: exoscale-s3-cluster-backup
+  namespace: backup
+spec:
+  schedule: "30 3 * * *"           # daily 03:30 UTC — after the 02:00 data job,
+                                   # and after the 03:00 etcd snapshot on server1
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          # Pinned because the etcd snapshots live on this node's filesystem.
+          # If server1 is down the cluster has larger problems and the snapshot
+          # would be stale anyway, so failing here is the honest outcome.
+          nodeSelector:
+            node-role.kubernetes.io/control-plane: "true"
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
+          securityContext:
+            runAsUser: 0           # etcd snapshot dir is root-owned 0700
+          containers:
+            - name: rclone
+              image: rclone/rclone:1.74.2
+              env:
+                - name: RCLONE_CONFIG
+                  value: /config/rclone.conf
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  # Far smaller than the user-data job (~1 GB vs ~400 GB), so the
+                  # aggressive multipart tuning there is unnecessary here. Memory
+                  # stays low: transfers * s3-upload-concurrency * s3-chunk-size.
+                  COMMON="--transfers=4 --checkers=8 --fast-list \
+                          --s3-chunk-size=16Mi --s3-upload-concurrency=2 \
+                          --retries=3 --low-level-retries=10 --use-mmap \
+                          --log-level=INFO --stats=1m --stats-one-line"
+
+                  # --- CNPG base backups + WAL, seven clusters ---------------
+                  # Bucket names come from each ObjectStore's destinationPath
+                  # (s3://<app>-backups/). Grouped under cnpg/ on the far side;
+                  # crypt encrypts the path components either way.
+                  for app in dealwatch immich event-manager n8n nextcloud paperless vigie; do
+                    echo "===== copy cnpg/$app (qnap-s3:${app}-backups) ====="
+                    # shellcheck disable=SC2086
+                    rclone copy "qnap-s3:${app}-backups" "exoscale-crypt:cnpg/${app}" $COMMON
+                  done
+
+                  # --- etcd snapshots, read from the control-plane node -------
+                  echo "===== copy etcd (/etcd-snapshots) ====="
+                  # shellcheck disable=SC2086
+                  rclone copy /etcd-snapshots "exoscale-crypt:etcd" $COMMON
+
+                  # --- Longhorn volume backups: DELIBERATELY NOT ENABLED ------
+                  # ~253 G (backup-strategy.md) => roughly €5/month at Exoscale's
+                  # €0.0198/GB, which more than doubles the current bill, versus
+                  # ~1 G for everything above. It is also the most reconstructible
+                  # tier: app PVCs whose real content is the databases (copied
+                  # above) or the NFS data (copied by cronjob.yaml). Enable only
+                  # as a deliberate, priced decision:
+                  #   rclone copy "qnap-s3:longhorn" "exoscale-crypt:longhorn" $COMMON
+                  echo "===== cluster backup complete ====="
+              volumeMounts:
+                - { name: rclone-config, mountPath: /config, readOnly: true }
+                - { name: etcd-snapshots, mountPath: /etcd-snapshots, readOnly: true }
+              resources:
+                requests: { cpu: "100m", memory: "256Mi" }
+                # crypt is AES-bound; 1Gi is ample for ~1 GB of input plus
+                # multipart buffers and listing.
+                limits: { cpu: "1", memory: "1Gi" }
+          volumes:
+            # Same Secret as the user-data job. It must now also carry the
+            # [qnap-s3] section — see README "QNAP S3 remote".
+            - name: rclone-config
+              secret:
+                secretName: exoscale-rclone-config
+            # k3s writes snapshots here on the server node (see docs.k3s.io
+            # /cli/etcd-snapshot). Read-only: this job must never be able to
+            # delete a snapshot.
+            - name: etcd-snapshots
+              hostPath:
+                path: /var/lib/rancher/k3s/server/db/snapshots
+                type: Directory
