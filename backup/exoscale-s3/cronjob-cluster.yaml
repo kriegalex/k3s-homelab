@@ -32,11 +32,19 @@
 # NOTE: a snapshot contains every unencrypted Secret in the cluster (k3s docs),
 # which is exactly why it must go through `crypt` and never to a plain bucket.
 #
-# Mode is `rclone copy` — additive, NEVER deletes on the destination — so a
-# corrupted or truncated source cannot propagate and destroy the off-site copy.
-# NOTE this is a property of the MODE, not of the bucket: the Exoscale key still
-# has full control (finding B-4). Enable bucket versioning; it is free and it is
-# what makes this copy survive its own credentials.
+# RETENTION IS BOUNDED, same scheme as cronjob.yaml: `rclone sync --backup-dir`
+# mirrors each source, and whatever the sync would delete or overwrite is MOVED
+# to exoscale-crypt:_archive-cluster/<run date>/... and purged after KEEP_DAYS.
+# The sources prune themselves (barman retentionPolicy 30d, k3s
+# etcd-snapshot-retention 14), so the mirror is bounded by them and the archive
+# by KEEP_DAYS — with `copy`, etcd alone grew ~117 MiB/day forever. A corrupted
+# or truncated source still cannot destroy the off-site copy inside that window.
+# Each source must also show a RECENT object or the job fails (KubeJobFailed):
+# syncing from a bucket that stopped receiving WAL would quietly age the
+# off-site copy out.
+# NOTE the Exoscale key still has full control (finding B-4). Bucket versioning
+# closes that, but only together with a lifecycle rule expiring noncurrent
+# versions — versioning alone keeps every archived-then-purged object forever.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -44,7 +52,7 @@ metadata:
   namespace: backup
 spec:
   schedule: "30 3 * * *"           # daily 03:30 UTC — after the 02:00 data job,
-                                   # and after the 01:00 UTC etcd snapshot on server1
+                                   # and after the 03:00 node-local etcd snapshot (01:00/02:00 UTC)
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 3600
   successfulJobsHistoryLimit: 3
@@ -78,6 +86,8 @@ spec:
               env:
                 - name: RCLONE_CONFIG
                   value: /config/rclone.conf
+                - name: KEEP_DAYS     # how long deleted/overwritten files stay recoverable
+                  value: "30"
               command: ["/bin/sh", "-c"]
               args:
                 - |
@@ -90,20 +100,50 @@ spec:
                           --retries=3 --low-level-retries=10 --use-mmap \
                           --log-level=INFO --stats=1m --stats-one-line"
 
+                  ARCHIVE=_archive-cluster
+                  TODAY=$(date -u +%F)
+
                   # --- CNPG base backups + WAL, seven clusters ---------------
                   # Bucket names come from each ObjectStore's destinationPath
                   # (s3://<app>-backups/). Grouped under cnpg/ on the far side;
                   # crypt encrypts the path components either way.
                   for app in dealwatch immich event-manager n8n nextcloud paperless vigie; do
-                    echo "===== copy cnpg/$app (qnap-s3:${app}-backups) ====="
+                    # WAL is archived at least every few minutes, so a bucket
+                    # with nothing newer than 2 days is broken, not quiet.
+                    if [ -z "$(rclone lsf -R --files-only --max-age 2d "qnap-s3:${app}-backups" | head -n 1)" ]; then
+                      echo "FATAL: qnap-s3:${app}-backups has no object newer than 2d - refusing to sync" >&2
+                      exit 1
+                    fi
+                    echo "===== sync cnpg/$app (qnap-s3:${app}-backups) ====="
                     # shellcheck disable=SC2086
-                    rclone copy "qnap-s3:${app}-backups" "exoscale-crypt:cnpg/${app}" $COMMON
+                    rclone sync "qnap-s3:${app}-backups" "exoscale-crypt:cnpg/${app}" \
+                      --backup-dir "exoscale-crypt:$ARCHIVE/$TODAY/cnpg/${app}" $COMMON
                   done
 
                   # --- etcd snapshots, read from the control-plane node -------
-                  echo "===== copy etcd (/etcd-snapshots) ====="
+                  if [ -z "$(rclone lsf --files-only --max-age 2d /etcd-snapshots | head -n 1)" ]; then
+                    echo "FATAL: no etcd snapshot newer than 2d in /etcd-snapshots - refusing to sync" >&2
+                    exit 1
+                  fi
+                  echo "===== sync etcd (/etcd-snapshots) ====="
                   # shellcheck disable=SC2086
-                  rclone copy /etcd-snapshots "exoscale-crypt:etcd" $COMMON
+                  rclone sync /etcd-snapshots "exoscale-crypt:etcd" \
+                    --backup-dir "exoscale-crypt:$ARCHIVE/$TODAY/etcd" $COMMON
+
+                  # --- prune archive days older than KEEP_DAYS -----------------
+                  # By dated directory name, not object age: a server-side move
+                  # keeps the original mtime (see cronjob.yaml header).
+                  CUTOFF=$(date -u -d "@$(( $(date -u +%s) - KEEP_DAYS * 86400 ))" +%Y%m%d)
+                  for day in $(rclone lsf --dirs-only "exoscale-crypt:$ARCHIVE" 2>/dev/null | tr -d /); do
+                    case "$day" in
+                      [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+                      *) echo "skip unexpected archive entry: $day"; continue ;;
+                    esac
+                    if [ "$(echo "$day" | tr -d -)" -lt "$CUTOFF" ]; then
+                      echo "===== purge $ARCHIVE/$day (older than ${KEEP_DAYS}d) ====="
+                      rclone purge "exoscale-crypt:$ARCHIVE/$day"
+                    fi
+                  done
 
                   # --- Longhorn volume backups: DELIBERATELY NOT ENABLED ------
                   # ~253 G (backup-strategy.md) => roughly €5/month at Exoscale's
@@ -111,8 +151,8 @@ spec:
                   # ~1 G for everything above. It is also the most reconstructible
                   # tier: app PVCs whose real content is the databases (copied
                   # above) or the NFS data (copied by cronjob.yaml). Enable only
-                  # as a deliberate, priced decision:
-                  #   rclone copy "qnap-s3:longhorn" "exoscale-crypt:longhorn" $COMMON
+                  # as a deliberate, priced decision (same sync + --backup-dir form
+                  # as above, so it stays bounded by Longhorn's retain=4).
                   echo "===== cluster backup complete ====="
               volumeMounts:
                 - { name: rclone-config, mountPath: /config, readOnly: true }

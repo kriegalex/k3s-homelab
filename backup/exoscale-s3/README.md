@@ -6,7 +6,7 @@ Fast, S3-native, **Swiss-hosted** off-site copy. Two CronJobs, both in namespace
 | Job | Manifest | Covers | Size | Schedule |
 |-----|----------|--------|------|----------|
 | `exoscale-s3-backup` | `cronjob.yaml` | NFS user data from mediaserver | ~398 G | 02:00 UTC |
-| `exoscale-s3-cluster-backup` | `cronjob-cluster.yaml` | 7 CNPG buckets + etcd snapshots | ~3 G, growing | 03:30 UTC |
+| `exoscale-s3-cluster-backup` | `cronjob-cluster.yaml` | 7 CNPG buckets + etcd snapshots | ~3 G | 03:30 UTC |
 
 This is the S3 counterpart to `../protondrive/`; it exists because Proton Drive's
 reverse-engineered backend is throughput-capped (single-stream, anti-abuse
@@ -40,18 +40,44 @@ both already covered. The one-line change to enable it is commented in
   **ch-gva-2** (Geneva) / **ch-dk-2** (Zurich). Keeps data in Switzerland,
   same jurisdiction as Proton.
 - **Cost:** ~€0.0198/GB/mo storage → **~€8/mo** for ~400 G; the cluster-state
-  job starts at roughly **€0.06/mo** and grows (see *Off-site growth* under
-  Operations). Egress €0.02/GB → **~€8** for a full ~400 G
+  job adds roughly **€0.15/mo** at steady state (mirror + 30 d archive). Egress €0.02/GB → **~€8** for a full ~400 G
   restore. API requests are free.
 - **Tool:** rclone `s3` backend + `crypt` wrapper, pinned to **1.74.2**.
 - **Encryption:** client-side AES (`crypt`) — Exoscale stores only opaque blobs,
   filenames included. Zero-knowledge, same as Proton. This matters more for the
   cluster job than the data one: an etcd snapshot contains every unencrypted
   Secret in the cluster, so it must never reach a plain bucket.
-- **Mode:** `rclone copy` — additive, never deletes on S3. That is a property of
-  the *mode*, not the bucket: the Exoscale key still has full control. Enable
-  bucket versioning (free, and can be turned on for an existing bucket) so the
-  copy survives its own credentials.
+- **Mode:** `rclone sync --backup-dir` — the destination mirrors the source, and
+  whatever a run would delete or overwrite is moved into a dated archive
+  instead (see *Retention*). A local deletion or corruption cannot destroy the
+  off-site copy, and nothing is kept forever. The Exoscale key still has full
+  control of the bucket; versioning closes that, but only with a lifecycle rule
+  that expires noncurrent versions (`NoncurrentVersionExpiration`, Early Access
+  at Exoscale — ask support), otherwise every purged object lives on as a
+  version and the bucket grows without bound.
+
+## Retention
+
+Every tier is bounded. Nothing here accumulates indefinitely.
+
+| Job | Mirror is bounded by | Deleted/overwritten files kept in | For |
+|-----|----------------------|-----------------------------------|-----|
+| `exoscale-s3-backup` | the live data on mediaserver | `exoscale-crypt:_archive-data/<date>/<category>/` | `KEEP_DAYS` = 90 |
+| `exoscale-s3-cluster-backup` | barman `retentionPolicy: 30d` per ObjectStore; k3s `etcd-snapshot-retention: 14` | `exoscale-crypt:_archive-cluster/<date>/…` | `KEEP_DAYS` = 30 |
+
+- `<date>` is the UTC day of the run that archived the file. Each run ends by
+  purging archive days older than `KEEP_DAYS`, **by directory name** — a
+  server-side move keeps a file's original mtime, so pruning by object age
+  would purge an old photo the day after it was archived.
+- Each source is checked before it is synced: the NFS categories must be
+  non-empty, each CNPG bucket and the etcd directory must hold something newer
+  than 2 days. A failed check fails the job (`KubeJobFailed`) instead of
+  archiving a whole category because a share was not mounted.
+- A source that loses files wholesale (an Unraid disk missing from the array)
+  moves them to the archive and re-uploads them when they return: bandwidth,
+  not data, for `KEEP_DAYS`.
+- To change a window, edit `KEEP_DAYS` in the manifest. Shortening it purges
+  the excess on the next run.
 
 > ⚠️ **The crypt password is the only key to this backup.** If you lose it, the
 > data is unrecoverable — Exoscale cannot help (that's the point). Store it in
@@ -184,13 +210,6 @@ control-plane toleration are what put it there.
 
 ## Operations
 
-- **Off-site growth:** `rclone copy` never deletes, and every etcd snapshot has
-  a unique timestamped name, so `exoscale-crypt:etcd` gains one ~117 M file a
-  day (~3.5 G/month, ~€0.07/mo per month of history) while k3s prunes its own
-  copies on the node. The CNPG prefixes grow the same way, far more slowly,
-  because barman's retention only prunes the QNAP side. Prune by hand from the
-  workstation when the history is longer than you would ever restore from:
-  `rclone --config ./rclone.conf delete --min-age 90d exoscale-crypt:etcd`.
 - **Watch progress:** `kubectl -n backup logs -f job/<job-name>` (stats every 1m).
 - **Verify size:** `rclone --config ./rclone.conf size exoscale-crypt:nextcloud`
   (decrypts sizes; should track the source).
@@ -213,6 +232,10 @@ Restore needs the **same `rclone.conf`** (the crypt key) — keep it with your
 disaster-recovery docs, not only in the cluster.
 ```fish
 rclone --config ./rclone.conf copy exoscale-crypt:nextcloud /restore/nextcloud
+
+# a file deleted or overwritten within the retention window:
+rclone --config ./rclone.conf lsf exoscale-crypt:_archive-data/          # archive days
+rclone --config ./rclone.conf copy exoscale-crypt:_archive-data/2026-01-31/nextcloud/path/to/file /restore/
 ```
 Pair it with the matching CNPG DB restore (Immich/Nextcloud/Paperless each need
 both their database AND these files).

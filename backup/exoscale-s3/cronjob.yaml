@@ -12,9 +12,18 @@
 # included). This matches Proton's privacy property without Proton's throughput
 # ceiling, and keeps the data in Switzerland (ch-gva-2 / ch-dk-2 zones).
 #
-# Mode is `rclone copy` (additive — NEVER deletes on S3) so a local
-# corruption/deletion cannot propagate and wipe the only off-site copy.
-# Switch to `sync --backup-dir=...` later, once the copy is proven.
+# RETENTION IS BOUNDED. Mode is `rclone sync --backup-dir`: the destination
+# mirrors the source, and anything the sync would delete or overwrite is MOVED
+# to exoscale-crypt:_archive-data/<run date>/<category>/ instead. Archive days
+# older than KEEP_DAYS are purged at the end of each run. A local deletion or
+# corruption therefore cannot destroy the off-site copy — it stays recoverable
+# for KEEP_DAYS — but nothing is kept forever either.
+# The archive is pruned by its DATED DIRECTORY NAME, never by object age: a
+# server-side move keeps the file's original mtime, so `delete --min-age` would
+# purge a years-old photo the day after it was archived.
+# A sync from an empty source (array stopped, share not mounted) would archive
+# the whole category and re-upload it next day, so each source must be
+# non-empty or the job fails — which pages via KubeJobFailed.
 #
 # Unlike Proton (Beta, single-stream, anti-abuse rate-limited), real S3 is
 # concurrency-safe and unthrottled, so we parallelise hard. The one constraint
@@ -46,6 +55,8 @@ spec:
               env:
                 - name: RCLONE_CONFIG
                   value: /config/rclone.conf
+                - name: KEEP_DAYS     # how long deleted/overwritten files stay recoverable
+                  value: "90"
               command: ["/bin/sh", "-c"]
               args:
                 - |
@@ -59,6 +70,8 @@ spec:
                           --s3-chunk-size=16Mi --s3-upload-concurrency=4 \
                           --retries=3 --low-level-retries=10 --use-mmap \
                           --log-level=INFO --stats=1m --stats-one-line"
+                  ARCHIVE=_archive-data
+                  TODAY=$(date -u +%F)
                   for pair in immich:/data/immich nextcloud:/data/nextcloud paperless:/data/paperless; do
                     name=${pair%%:*}; src=${pair#*:}
                     # immich's thumbs/ and encoded-video/ are derived cache that
@@ -69,9 +82,27 @@ spec:
                     if [ "$name" = "immich" ]; then
                       EXTRA="--exclude thumbs/** --exclude encoded-video/**"
                     fi
-                    echo "===== copy $name ($src) -> exoscale-crypt:$name ====="
+                    if [ -z "$(ls -A "$src" 2>/dev/null | head -n 1)" ]; then
+                      echo "FATAL: $src is empty or unreadable - refusing to sync from it" >&2
+                      exit 1
+                    fi
+                    echo "===== sync $name ($src) -> exoscale-crypt:$name ====="
                     # shellcheck disable=SC2086
-                    rclone copy "$src" "exoscale-crypt:$name" $COMMON $EXTRA
+                    rclone sync "$src" "exoscale-crypt:$name" \
+                      --backup-dir "exoscale-crypt:$ARCHIVE/$TODAY/$name" $COMMON $EXTRA
+                  done
+
+                  # --- prune archive days older than KEEP_DAYS -----------------
+                  CUTOFF=$(date -u -d "@$(( $(date -u +%s) - KEEP_DAYS * 86400 ))" +%Y%m%d)
+                  for day in $(rclone lsf --dirs-only "exoscale-crypt:$ARCHIVE" 2>/dev/null | tr -d /); do
+                    case "$day" in
+                      [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+                      *) echo "skip unexpected archive entry: $day"; continue ;;
+                    esac
+                    if [ "$(echo "$day" | tr -d -)" -lt "$CUTOFF" ]; then
+                      echo "===== purge $ARCHIVE/$day (older than ${KEEP_DAYS}d) ====="
+                      rclone purge "exoscale-crypt:$ARCHIVE/$day"
+                    fi
                   done
                   echo "===== all categories complete ====="
               volumeMounts:
