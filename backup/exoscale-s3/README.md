@@ -209,6 +209,38 @@ control-plane toleration are what put it there.
 
 ---
 
+## Bucket versioning and lifecycle
+
+Versioning is what lets the off-site copy survive its own credentials: the
+in-cluster key can delete objects, but a deleted or overwritten object stays
+recoverable as a noncurrent version. On its own it would break the retention
+rule — every file the jobs purge from the archive would live on as a version
+forever — so it is only ever enabled **together with** `lifecycle.json`:
+
+| Rule | Effect |
+|------|--------|
+| `expire-noncurrent-versions` | noncurrent versions are deleted after 30 days |
+| `remove-dangling-delete-markers` | delete markers with no versions left behind them are removed |
+| `abort-stale-multipart-uploads` | incomplete multipart uploads are aborted after 7 days |
+
+Worst-case lifetime of a deleted file is therefore `KEEP_DAYS` in the archive
+plus 30 days as a noncurrent version of the purged archive copy (120 days for
+user data, 60 for cluster state).
+
+Bucket Lifecycle is an Early Access feature at Exoscale and has to be enabled
+for the organisation by support first. Apply the rules **before** versioning,
+in the same sitting, with the `exo` CLI (`paru -S exoscale-cli`):
+
+```fish
+exo storage bucket lifecycle set sos://<bucket> backup/exoscale-s3/lifecycle.json -z <zone>
+exo storage bucket versioning enable sos://<bucket> -z <zone>
+exo storage bucket versioning status sos://<bucket> -z <zone>
+```
+
+Lifecycle evaluation runs daily at midnight UTC. Restoring a noncurrent
+version goes through the underlying remote's version flags, e.g.
+`rclone --s3-version-at "2026-01-31 12:00:00" copy exoscale-crypt:nextcloud/path /restore/`.
+
 ## Operations
 
 - **Watch progress:** `kubectl -n backup logs -f job/<job-name>` (stats every 1m).
