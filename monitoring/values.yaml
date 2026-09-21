@@ -184,6 +184,9 @@ prometheus:
 alertmanager:
   enabled: true
   alertmanagerSpec:
+    # Mounted at /etc/alertmanager/secrets/<name>/ — see monitoring/deadman.
+    secrets:
+      - deadman-heartbeat
     affinity:
       nodeAffinity:
         preferredDuringSchedulingIgnoredDuringExecution:
@@ -210,8 +213,14 @@ alertmanager:
       group_interval: 5m
       repeat_interval: 12h
       routes:
+        # Dead-man's switch (monitoring/deadman): Watchdog always fires, so
+        # it is forwarded every minute to Healthchecks on homelab1, which
+        # pages when the pings STOP — i.e. when this whole chain is dead.
         - matchers: [alertname = "Watchdog"]
-          receiver: "null"
+          receiver: deadman
+          group_wait: 0s
+          group_interval: 1m
+          repeat_interval: 1m
         # InfoInhibitor carries severity=none, so the severity=info route
         # below misses it; null it by name (as upstream's stock config does).
         # Its only purpose is an inhibit rule this config doesn't define.
@@ -224,6 +233,12 @@ alertmanager:
           repeat_interval: 1h         # critical re-pages every hour
     receivers:
       - name: "null"
+      - name: deadman
+        webhook_configs:
+          # The ping URL is a credential: read from Secret deadman-heartbeat
+          # (mounted via alertmanagerSpec.secrets), never written here.
+          - url_file: /etc/alertmanager/secrets/deadman-heartbeat/url
+            send_resolved: false
       - name: ntfy
         webhook_configs:
           - url: http://alertmanager-ntfy.ntfy.svc.cluster.local/

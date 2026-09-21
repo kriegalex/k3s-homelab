@@ -1,0 +1,16 @@
+# Healthchecks on homelab1 (10.0.0.50) — the dead-man's switch for the cluster.
+# Deployed with Docker Compose / Arcane on homelab1, NOT in the cluster: the
+# watcher must survive what it watches. See README.md.
+services:
+  healthchecks:
+    image: healthchecks/healthchecks:v4.4
+    container_name: healthchecks
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "10.0.0.50:8000:8000"     # LAN interface only; never port-forward this
+    volumes:
+      - healthchecks-data:/data   # SQLite database (/data is owned by the image's hc user)
+
+volumes:
+  healthchecks-data:

@@ -31,6 +31,7 @@ ingress/traefik/_live/
 **/secrets.yaml
 **/secrets-*.yaml
 !**/secrets-template.yaml
+**/.env
 **/*secrets*.yaml.bak
 **/s3-backup-credentials-secret.yaml
 **/*-secret.yaml

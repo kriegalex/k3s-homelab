@@ -86,12 +86,22 @@ spec:
               env:
                 - name: RCLONE_CONFIG
                   value: /config/rclone.conf
+                - name: HC_URL        # heartbeat ping URL; optional
+                  valueFrom:
+                    secretKeyRef: { name: backup-heartbeats, key: HC_CLUSTER_URL, optional: true }
                 - name: KEEP_DAYS     # how long deleted/overwritten files stay recoverable
                   value: "30"
               command: ["/bin/sh", "-c"]
               args:
                 - |
                   set -eu
+                  # Dead-man's switch (monitoring/deadman): ping /start now and the
+                  # exit status on the way out (0 = success, anything else = fail).
+                  # Best-effort by design: without the optional Secret, or with the
+                  # watcher unreachable, the backup runs exactly as before.
+                  hc() { [ -z "${HC_URL:-}" ] || wget -q -T 10 -O /dev/null "${HC_URL}$1" || true; }
+                  trap 'hc "/$?"' EXIT
+                  hc /start
                   # Far smaller than the user-data job (~4 GB vs ~400 GB), so the
                   # aggressive multipart tuning there is unnecessary here. Memory
                   # stays low: transfers * s3-upload-concurrency * s3-chunk-size.

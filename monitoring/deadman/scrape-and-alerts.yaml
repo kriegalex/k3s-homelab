@@ -1,0 +1,54 @@
+---
+# The cluster watches the watcher: Prometheus scrapes Healthchecks on homelab1,
+# so a dead watcher pages through the normal Alertmanager -> ntfy path, and a
+# failed check is visible in-cluster as well as through Healthchecks' own
+# notification. Replace PROJECT_UUID (not a secret; the token is).
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: deadman-healthchecks
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  jobName: healthchecks
+  scrapeInterval: 60s
+  scheme: HTTP
+  metricsPath: /projects/PROJECT_UUID/metrics/
+  authorization:
+    type: Bearer
+    credentials:
+      name: deadman-metrics
+      key: token
+  staticConfigs:
+    - targets: ["10.0.0.50:8000"]
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: deadman-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: deadman
+      rules:
+        - alert: DeadmanWatcherDown
+          expr: up{job="healthchecks"} == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: Healthchecks on homelab1 is unreachable
+            description: >-
+              The dead-man's switch itself is down, so a cluster or backup
+              failure would currently go unnoticed.
+        - alert: DeadmanCheckDown
+          expr: hc_check_up{job="healthchecks"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: 'Healthchecks check "{{ $labels.name }}" is down'
+            description: A job that reports to the dead-man's switch has stopped reporting or signalled failure.

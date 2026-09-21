@@ -55,12 +55,22 @@ spec:
               env:
                 - name: RCLONE_CONFIG
                   value: /config/rclone.conf
+                - name: HC_URL        # heartbeat ping URL; optional
+                  valueFrom:
+                    secretKeyRef: { name: backup-heartbeats, key: HC_DATA_URL, optional: true }
                 - name: KEEP_DAYS     # how long deleted/overwritten files stay recoverable
                   value: "90"
               command: ["/bin/sh", "-c"]
               args:
                 - |
                   set -eu
+                  # Dead-man's switch (monitoring/deadman): ping /start now and the
+                  # exit status on the way out (0 = success, anything else = fail).
+                  # Best-effort by design: without the optional Secret, or with the
+                  # watcher unreachable, the backup runs exactly as before.
+                  hc() { [ -z "${HC_URL:-}" ] || wget -q -T 10 -O /dev/null "${HC_URL}$1" || true; }
+                  trap 'hc "/$?"' EXIT
+                  hc /start
                   # S3 is concurrency-safe and unthrottled — no tpslimit needed.
                   # --fast-list does one recursive listing (S3 supports ListR),
                   # which makes the re-walk / incremental runs cheap. Memory is
