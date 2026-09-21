@@ -17,7 +17,7 @@
 #   nextcloud  -> file blobs survive, shares/tags/the file tree are gone
 #   paperless  -> scans survive, OCR text/tags/correspondents are gone
 #   n8n, event-manager, dealwatch, vigie -> lost outright
-# The CNPG buckets are ~1 GB in total (backup-strategy.md), so closing that hole
+# The CNPG buckets are ~2.4 GB in total (~28 000 objects, mostly WAL), so closing that hole
 # costs a few cents a month. This is the cheapest high-value item in the review.
 #
 # SOURCE IS S3, NOT NFS. Reading the QNAP's S3 endpoint avoids mounting shares
@@ -92,7 +92,7 @@ spec:
               args:
                 - |
                   set -eu
-                  # Far smaller than the user-data job (~1 GB vs ~400 GB), so the
+                  # Far smaller than the user-data job (~4 GB vs ~400 GB), so the
                   # aggressive multipart tuning there is unnecessary here. Memory
                   # stays low: transfers * s3-upload-concurrency * s3-chunk-size.
                   COMMON="--transfers=4 --checkers=8 --fast-list \
@@ -148,7 +148,7 @@ spec:
                   # --- Longhorn volume backups: DELIBERATELY NOT ENABLED ------
                   # ~253 G (backup-strategy.md) => roughly €5/month at Exoscale's
                   # €0.0198/GB, which more than doubles the current bill, versus
-                  # ~1 G for everything above. It is also the most reconstructible
+                  # ~4 G for everything above. It is also the most reconstructible
                   # tier: app PVCs whose real content is the databases (copied
                   # above) or the NFS data (copied by cronjob.yaml). Enable only
                   # as a deliberate, priced decision (same sync + --backup-dir form
@@ -159,7 +159,7 @@ spec:
                 - { name: etcd-snapshots, mountPath: /etcd-snapshots, readOnly: true }
               resources:
                 requests: { cpu: "100m", memory: "256Mi" }
-                # crypt is AES-bound; 1Gi is ample for ~1 GB of input plus
+                # crypt is AES-bound; 1Gi is ample for ~4 GB of input plus
                 # multipart buffers and listing.
                 limits: { cpu: "1", memory: "1Gi" }
           volumes:

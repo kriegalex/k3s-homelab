@@ -6,7 +6,7 @@ Fast, S3-native, **Swiss-hosted** off-site copy. Two CronJobs, both in namespace
 | Job | Manifest | Covers | Size | Schedule |
 |-----|----------|--------|------|----------|
 | `exoscale-s3-backup` | `cronjob.yaml` | NFS user data from mediaserver | ~398 G | 02:00 UTC |
-| `exoscale-s3-cluster-backup` | `cronjob-cluster.yaml` | 7 CNPG buckets + etcd snapshots | ~3 G | 03:30 UTC |
+| `exoscale-s3-cluster-backup` | `cronjob-cluster.yaml` | 7 CNPG buckets + etcd snapshots | ~4.2 G | 03:30 UTC |
 
 This is the S3 counterpart to `../protondrive/`; it exists because Proton Drive's
 reverse-engineered backend is throughput-capped (single-stream, anti-abuse
@@ -27,7 +27,7 @@ tree; paperless keeps scans but loses OCR text and tags.
 
 | Source | Size | Dest (encrypted) |
 |--------|------|------------------|
-| `qnap-s3:{dealwatch,immich,event-manager,n8n,nextcloud,paperless,vigie}-backups` | ~1 G total | `exoscale-crypt:cnpg/<app>` |
+| `qnap-s3:{dealwatch,immich,event-manager,n8n,nextcloud,paperless,vigie}-backups` | ~2.4 G total, ~28 000 objects | `exoscale-crypt:cnpg/<app>` |
 | `/var/lib/rancher/k3s/server/db/snapshots` (hostPath on k3s-server1) | ~117 M per snapshot, ~1.9 G retained on the node | `exoscale-crypt:etcd` |
 
 Longhorn's volume backups (`qnap-s3:longhorn`, ~253 G) are **deliberately not
@@ -40,7 +40,7 @@ both already covered. The one-line change to enable it is commented in
   **ch-gva-2** (Geneva) / **ch-dk-2** (Zurich). Keeps data in Switzerland,
   same jurisdiction as Proton.
 - **Cost:** ~€0.0198/GB/mo storage → **~€8/mo** for ~400 G; the cluster-state
-  job adds roughly **€0.15/mo** at steady state (mirror + 30 d archive). Egress €0.02/GB → **~€8** for a full ~400 G
+  job adds roughly **€0.20/mo** at steady state (mirror + 30 d archive). Egress €0.02/GB → **~€8** for a full ~400 G
   restore. API requests are free.
 - **Tool:** rclone `s3` backend + `crypt` wrapper, pinned to **1.74.2**.
 - **Encryption:** client-side AES (`crypt`) — Exoscale stores only opaque blobs,
@@ -193,8 +193,9 @@ kubectl -n backup create job cluster-seed --from=cronjob/exoscale-s3-cluster-bac
 kubectl -n backup logs -f job/cluster-seed
 ```
 
-The first run seeds ~3 G (the etcd snapshots are the bulk of it) and should
-finish in a few minutes. Confirm both
+The first run seeds ~4.2 G and takes about 15 minutes — the ~28 000 small WAL
+objects dominate, not the bytes. Nightly runs only carry the day's WAL and one
+etcd snapshot. Confirm both
 prefixes landed:
 
 ```fish
