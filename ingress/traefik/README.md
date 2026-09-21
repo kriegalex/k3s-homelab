@@ -12,7 +12,8 @@ for the migration playbook.
 | Service type | `LoadBalancer` (MetalLB) |
 | External IP | `10.0.0.20` |
 | IngressClass | `traefik` (NOT cluster default — every Ingress sets `ingressClassName: traefik` explicitly) |
-| Dashboard | `http://traefik.k3s.home` (IngressRoute, no auth — internal-only via DNS) |
+| Dashboard | `http://traefik.k3s.home` (IngressRoute, no auth — inside networks only, see `ingressroute-lan-only.yaml`) |
+| `*.k3s.home` | answered only for LAN, Teleport/WireGuard VPN and pod clients; everyone else gets 403 (`ingressroute-lan-only.yaml`) |
 
 ## Files
 
@@ -21,6 +22,7 @@ ingress/traefik/
 ├── README.md                     # this file
 ├── values.yaml                   # Helm values (committed)
 ├── ingressroute-dashboard.yaml   # IngressRoute serving the Traefik dashboard
+├── ingressroute-lan-only.yaml    # fail-closed 403 for *.k3s.home from outside the inside networks
 └── middlewares/                  # cluster-wide Middleware/ServersTransport CRDs
     ├── README.md
     ├── nextcloud.yaml            # 4 mws: well-known-dav, well-known-rewrite, security-headers, cors
@@ -51,8 +53,9 @@ helm upgrade --install traefik traefik/traefik \
   --version 39.0.8 \
   -f values.yaml
 
-# Apply the dashboard route + middlewares
+# Apply the dashboard route, the *.k3s.home guard + middlewares
 kubectl apply -f ingressroute-dashboard.yaml
+kubectl apply -f ingressroute-lan-only.yaml
 kubectl apply -f middlewares/
 ```
 

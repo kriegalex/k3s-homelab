@@ -1,0 +1,52 @@
+---
+# Fail-closed guard for every *.k3s.home hostname.
+#
+# Ingresses without an entrypoint annotation are served on BOTH entrypoints,
+# and both are port-forwarded from the WAN (80 and 443, source `any`). "k3s.home
+# only resolves on the LAN" is therefore not a control: anyone who sends
+# `Host: longhorn.k3s.home` to the WAN IP reaches the unauthenticated Longhorn
+# UI, qBittorrent, the *arr apps and the Traefik dashboard.
+#
+# This router outranks every per-app router (priority) and matches a *.k3s.home
+# request only when the client is NOT on an inside network; it then answers 403
+# through a deny-all ipAllowList. Inside clients never match it and fall through
+# to the app's own router untouched. Because it keys on the hostname pattern, a
+# new *.k3s.home Ingress is covered the day it is created — nothing to remember.
+#
+# Real client IPs are required for this to mean anything: they are preserved by
+# `externalTrafficPolicy: Local` on the Traefik Service (values.yaml).
+#
+# Inside networks: LAN (10.0.0.0/24), the gateway's Teleport VPN clients
+# (192.168.2.0/24) and WireGuard clients (192.168.3.0/24), the pod network
+# (10.42.0.0/16).
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: deny-all
+  namespace: traefik
+spec:
+  ipAllowList:
+    sourceRange:
+      - 192.0.2.1/32          # TEST-NET-1: never a real client, so everyone gets 403
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: k3s-home-lan-only
+  namespace: traefik
+spec:
+  entryPoints: [web, websecure]
+  routes:
+    - match: >-
+        HostRegexp(`^.+\.k3s\.home$`)
+        && !ClientIP(`10.0.0.0/24`)
+        && !ClientIP(`192.168.2.0/24`)
+        && !ClientIP(`192.168.3.0/24`)
+        && !ClientIP(`10.42.0.0/16`)
+      kind: Rule
+      priority: 100000
+      middlewares:
+        - name: deny-all
+      services:
+        - name: noop@internal
+          kind: TraefikService
