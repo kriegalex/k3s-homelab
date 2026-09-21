@@ -6,7 +6,7 @@ Fast, S3-native, **Swiss-hosted** off-site copy. Two CronJobs, both in namespace
 | Job | Manifest | Covers | Size | Schedule |
 |-----|----------|--------|------|----------|
 | `exoscale-s3-backup` | `cronjob.yaml` | NFS user data from mediaserver | ~398 G | 02:00 UTC |
-| `exoscale-s3-cluster-backup` | `cronjob-cluster.yaml` | 7 CNPG buckets + etcd snapshots | ~1 G | 03:30 UTC |
+| `exoscale-s3-cluster-backup` | `cronjob-cluster.yaml` | 7 CNPG buckets + etcd snapshots | ~3 G, growing | 03:30 UTC |
 
 This is the S3 counterpart to `../protondrive/`; it exists because Proton Drive's
 reverse-engineered backend is throughput-capped (single-stream, anti-abuse
@@ -28,7 +28,7 @@ tree; paperless keeps scans but loses OCR text and tags.
 | Source | Size | Dest (encrypted) |
 |--------|------|------------------|
 | `qnap-s3:{dealwatch,immich,event-manager,n8n,nextcloud,paperless,vigie}-backups` | ~1 G total | `exoscale-crypt:cnpg/<app>` |
-| `/var/lib/rancher/k3s/server/db/snapshots` (hostPath on k3s-server1) | small | `exoscale-crypt:etcd` |
+| `/var/lib/rancher/k3s/server/db/snapshots` (hostPath on k3s-server1) | ~117 M per snapshot, ~1.9 G retained on the node | `exoscale-crypt:etcd` |
 
 Longhorn's volume backups (`qnap-s3:longhorn`, ~253 G) are **deliberately not
 copied** — they would more than double the bill for the most reconstructible
@@ -40,7 +40,8 @@ both already covered. The one-line change to enable it is commented in
   **ch-gva-2** (Geneva) / **ch-dk-2** (Zurich). Keeps data in Switzerland,
   same jurisdiction as Proton.
 - **Cost:** ~€0.0198/GB/mo storage → **~€8/mo** for ~400 G; the cluster-state
-  job adds roughly **€0.02/mo**. Egress €0.02/GB → **~€8** for a full ~400 G
+  job starts at roughly **€0.06/mo** and grows (see *Off-site growth* under
+  Operations). Egress €0.02/GB → **~€8** for a full ~400 G
   restore. API requests are free.
 - **Tool:** rclone `s3` backend + `crypt` wrapper, pinned to **1.74.2**.
 - **Encryption:** client-side AES (`crypt`) — Exoscale stores only opaque blobs,
@@ -166,7 +167,8 @@ kubectl -n backup create job cluster-seed --from=cronjob/exoscale-s3-cluster-bac
 kubectl -n backup logs -f job/cluster-seed
 ```
 
-The first run seeds ~1 G and should finish in a couple of minutes. Confirm both
+The first run seeds ~3 G (the etcd snapshots are the bulk of it) and should
+finish in a few minutes. Confirm both
 prefixes landed:
 
 ```fish
@@ -182,6 +184,13 @@ control-plane toleration are what put it there.
 
 ## Operations
 
+- **Off-site growth:** `rclone copy` never deletes, and every etcd snapshot has
+  a unique timestamped name, so `exoscale-crypt:etcd` gains one ~117 M file a
+  day (~3.5 G/month, ~€0.07/mo per month of history) while k3s prunes its own
+  copies on the node. The CNPG prefixes grow the same way, far more slowly,
+  because barman's retention only prunes the QNAP side. Prune by hand from the
+  workstation when the history is longer than you would ever restore from:
+  `rclone --config ./rclone.conf delete --min-age 90d exoscale-crypt:etcd`.
 - **Watch progress:** `kubectl -n backup logs -f job/<job-name>` (stats every 1m).
 - **Verify size:** `rclone --config ./rclone.conf size exoscale-crypt:nextcloud`
   (decrypts sizes; should track the source).

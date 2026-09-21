@@ -44,7 +44,7 @@ metadata:
   namespace: backup
 spec:
   schedule: "30 3 * * *"           # daily 03:30 UTC — after the 02:00 data job,
-                                   # and after the 03:00 etcd snapshot on server1
+                                   # and after the 01:00 UTC etcd snapshot on server1
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 3600
   successfulJobsHistoryLimit: 3
@@ -60,7 +60,13 @@ spec:
           # would be stale anyway, so failing here is the honest outcome.
           nodeSelector:
             node-role.kubernetes.io/control-plane: "true"
+          # k3s-ansible taints server1 with the legacy `master` key; the
+          # `control-plane` key is tolerated too so a re-taint does not strand
+          # the job in Pending.
           tolerations:
+            - key: node-role.kubernetes.io/master
+              operator: Exists
+              effect: NoSchedule
             - key: node-role.kubernetes.io/control-plane
               operator: Exists
               effect: NoSchedule
