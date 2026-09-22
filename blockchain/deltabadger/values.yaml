@@ -6,14 +6,14 @@ controllers:
       app:
         env:
           APP_ROOT_URL: https://badger.lourenco.ch
+          FORCE_SSL: "true"
           HOME_PAGE_URL: https://badger.lourenco.ch
-          RAILS_ASSUME_SSL: "true"
         envFrom:
         - secretRef:
             name: deltabadger-secrets
         image:
           pullPolicy: IfNotPresent
-          tag: 2.23.5
+          tag: 2.61.12
         resources:
           limits:
             cpu: 500m
