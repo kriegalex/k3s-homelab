@@ -112,17 +112,24 @@ spec:
 
                   ARCHIVE=_archive-cluster
                   TODAY=$(date -u +%F)
+                  # A stale source skips only itself: every other source still
+                  # syncs, and the job exits 1 at the end so KubeJobFailed fires.
+                  STALE=""
 
                   # --- CNPG base backups + WAL, seven clusters ---------------
                   # Bucket names come from each ObjectStore's destinationPath
                   # (s3://<app>-backups/). Grouped under cnpg/ on the far side;
                   # crypt encrypts the path components either way.
                   for app in dealwatch immich event-manager n8n nextcloud paperless vigie; do
-                    # WAL is archived at least every few minutes, so a bucket
-                    # with nothing newer than 2 days is broken, not quiet.
-                    if [ -z "$(rclone lsf -R --files-only --max-age 2d "qnap-s3:${app}-backups" | head -n 1)" ]; then
-                      echo "FATAL: qnap-s3:${app}-backups has no object newer than 2d - refusing to sync" >&2
-                      exit 1
+                    # WAL is NOT a reliable heartbeat: archive_timeout only
+                    # switches segments after writes, so an idle database
+                    # (event-manager) archives nothing for weeks. The weekly
+                    # base backup is the one write every bucket always gets,
+                    # so nothing newer than 8 days means broken, not quiet.
+                    if [ -z "$(rclone lsf -R --files-only --max-age 8d "qnap-s3:${app}-backups" | head -n 1)" ]; then
+                      echo "ERROR: qnap-s3:${app}-backups has no object newer than 8d - skipping it" >&2
+                      STALE="$STALE cnpg/$app"
+                      continue
                     fi
                     echo "===== sync cnpg/$app (qnap-s3:${app}-backups) ====="
                     # shellcheck disable=SC2086
@@ -132,13 +139,14 @@ spec:
 
                   # --- etcd snapshots, read from the control-plane node -------
                   if [ -z "$(rclone lsf --files-only --max-age 2d /etcd-snapshots | head -n 1)" ]; then
-                    echo "FATAL: no etcd snapshot newer than 2d in /etcd-snapshots - refusing to sync" >&2
-                    exit 1
+                    echo "ERROR: no etcd snapshot newer than 2d in /etcd-snapshots - skipping it" >&2
+                    STALE="$STALE etcd"
+                  else
+                    echo "===== sync etcd (/etcd-snapshots) ====="
+                    # shellcheck disable=SC2086
+                    rclone sync /etcd-snapshots "exoscale-crypt:etcd" \
+                      --backup-dir "exoscale-crypt:$ARCHIVE/$TODAY/etcd" $COMMON
                   fi
-                  echo "===== sync etcd (/etcd-snapshots) ====="
-                  # shellcheck disable=SC2086
-                  rclone sync /etcd-snapshots "exoscale-crypt:etcd" \
-                    --backup-dir "exoscale-crypt:$ARCHIVE/$TODAY/etcd" $COMMON
 
                   # --- prune archive days older than KEEP_DAYS -----------------
                   # By dated directory name, not object age: a server-side move
@@ -163,6 +171,10 @@ spec:
                   # above) or the NFS data (copied by cronjob.yaml). Enable only
                   # as a deliberate, priced decision (same sync + --backup-dir form
                   # as above, so it stays bounded by Longhorn's retain=4).
+                  if [ -n "$STALE" ]; then
+                    echo "FATAL: stale sources not synced:$STALE" >&2
+                    exit 1
+                  fi
                   echo "===== cluster backup complete ====="
               volumeMounts:
                 - { name: rclone-config, mountPath: /config, readOnly: true }

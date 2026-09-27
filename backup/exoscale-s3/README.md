@@ -70,9 +70,12 @@ Every tier is bounded. Nothing here accumulates indefinitely.
   server-side move keeps a file's original mtime, so pruning by object age
   would purge an old photo the day after it was archived.
 - Each source is checked before it is synced: the NFS categories must be
-  non-empty, each CNPG bucket and the etcd directory must hold something newer
-  than 2 days. A failed check fails the job (`KubeJobFailed`) instead of
-  archiving a whole category because a share was not mounted.
+  non-empty, each CNPG bucket must hold something newer than 8 days (the
+  weekly base backup — an idle database archives no WAL for weeks), and the
+  etcd directory something newer than 2 days. A failed check fails the job
+  (`KubeJobFailed`) instead of archiving a whole category because a share was
+  not mounted. In the cluster job a stale source skips only itself; the other
+  sources still sync before the job exits non-zero.
 - A source that loses files wholesale (an Unraid disk missing from the array)
   moves them to the archive and re-uploads them when they return: bandwidth,
   not data, for `KEEP_DAYS`.
