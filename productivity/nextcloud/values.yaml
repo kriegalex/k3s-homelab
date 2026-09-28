@@ -3,7 +3,7 @@
 image:
   repository: nextcloud
   flavor: fpm
-  tag: 34.0.1-fpm
+  tag: 34.0.4-fpm
   pullPolicy: IfNotPresent
 
 # Number of replicas to be deployed
