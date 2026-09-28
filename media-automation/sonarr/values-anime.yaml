@@ -25,7 +25,7 @@ affinity:
 image:
   pullPolicy: IfNotPresent
   repository: ghcr.io/hotio/sonarr
-  tag: release-4.0.19.2979
+  tag: release-4.0.20.3014
 ingress:
   className: traefik
   enabled: true

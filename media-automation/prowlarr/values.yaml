@@ -6,7 +6,7 @@ image:
   repository: ghcr.io/hotio/prowlarr
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "release-2.4.0.5397"
+  tag: "release-2.6.5.5623"
 
 service:
   type: ClusterIP
