@@ -51,8 +51,9 @@ metadata:
   name: exoscale-s3-cluster-backup
   namespace: backup
 spec:
-  schedule: "30 3 * * *"           # daily 03:30 UTC — after the 02:00 data job,
-                                   # and after the 03:00 node-local etcd snapshot (01:00/02:00 UTC)
+  schedule: "30 3 * * *"           # daily 03:30 local time — after the 02:00 data job
+                                   # and the 03:00 etcd snapshot (k3s, node-local time)
+  timeZone: Europe/Brussels        # same as the nodes; explicit so the schedule never depends on them
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 3600
   successfulJobsHistoryLimit: 3

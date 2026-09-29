@@ -5,8 +5,8 @@ Fast, S3-native, **Swiss-hosted** off-site copy. Two CronJobs, both in namespace
 
 | Job | Manifest | Covers | Size | Schedule |
 |-----|----------|--------|------|----------|
-| `exoscale-s3-backup` | `cronjob.yaml` | NFS user data from mediaserver | ~398 G | 02:00 UTC |
-| `exoscale-s3-cluster-backup` | `cronjob-cluster.yaml` | 7 CNPG buckets + etcd snapshots | ~4.2 G | 03:30 UTC |
+| `exoscale-s3-backup` | `cronjob.yaml` | NFS user data from mediaserver | ~398 G | 02:00 Europe/Brussels |
+| `exoscale-s3-cluster-backup` | `cronjob-cluster.yaml` | 7 CNPG buckets + etcd snapshots | ~4.2 G | 03:30 Europe/Brussels |
 
 This is the S3 counterpart to `../protondrive/`; it exists because Proton Drive's
 reverse-engineered backend is throughput-capped (single-stream, anti-abuse

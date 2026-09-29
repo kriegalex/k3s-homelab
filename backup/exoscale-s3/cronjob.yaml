@@ -36,7 +36,8 @@ metadata:
   name: exoscale-s3-backup
   namespace: backup
 spec:
-  schedule: "0 2 * * *"            # daily 02:00 UTC (offset from Proton's 04:00)
+  schedule: "0 2 * * *"            # daily 02:00 local time
+  timeZone: Europe/Brussels        # same as the nodes; explicit so the schedule never depends on them
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 3600
   successfulJobsHistoryLimit: 3
