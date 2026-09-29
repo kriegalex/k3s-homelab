@@ -37,10 +37,13 @@ Watchdog route in `monitoring/values.yaml`, the `HC_URL` pings in both
 
 | Check | Pinged by | Schedule in Healthchecks | Grace |
 |-------|-----------|--------------------------|-------|
-| `cluster-watchdog` | Alertmanager, every minute (always-firing `Watchdog` alert) | simple, period 2 min | 5 min |
-| `exoscale-data` | `exoscale-s3-backup` CronJob: `/start`, then exit status | cron `0 2 * * *`, UTC | 2 h |
-| `exoscale-cluster` | `exoscale-s3-cluster-backup` CronJob: `/start`, then exit status | cron `30 3 * * *`, UTC | 1 h |
+| `cluster-watchdog` | Alertmanager, every 1–2 min (always-firing `Watchdog` alert) | simple, period 2 min | 5 min |
+| `exoscale-data` | `exoscale-s3-backup` CronJob: `/start`, then exit status | cron `0 2 * * *`, Europe/Brussels | 2 h |
+| `exoscale-cluster` | `exoscale-s3-cluster-backup` CronJob: `/start`, then exit status | cron `30 3 * * *`, Europe/Brussels | 1 h |
 | `etcd-snapshot-sync` | systemd unit on k3s-server1 (`ExecStartPost`) | cron `0 4 * * *`, UTC | 1 h |
+
+Each check's time zone must match its sender: the CronJobs set
+`timeZone: Europe/Brussels`, the etcd timer uses `OnCalendar=… UTC`.
 
 Ping URLs are credentials (anyone on the LAN holding one can fake "alive"), so
 they live in Secrets and in a root-only systemd drop-in — never in Git.
@@ -88,7 +91,8 @@ helm diff upgrade prometheus prometheus-community/kube-prometheus-stack -n monit
   --version 87.17.0
 # ...then the same command with `upgrade` instead of `diff upgrade`.
 
-# The cluster watches the watcher (put the project UUID into metricsPath first)
+# The cluster watches the watcher (metricsPath carries the Healthchecks project UUID;
+# update it if the project is ever recreated)
 kubectl apply -f monitoring/deadman/scrape-and-alerts.yaml
 
 # Backup jobs start pinging on their next run
@@ -100,12 +104,13 @@ kubectl apply -f backup/exoscale-s3/cronjob.yaml -f backup/exoscale-s3/cronjob-c
 ```bash
 sudo systemctl edit etcd-snapshot-sync.service
 # [Service]
-# ExecStartPost=/usr/bin/curl -fsS -m 10 --retry 3 -o /dev/null http://10.0.0.50:8000/ping/<uuid>
+# ExecStartPost=-/usr/bin/curl -fsS -m 10 --retry 3 -o /dev/null http://10.0.0.50:8000/ping/<uuid>
 sudo chmod 600 /etc/systemd/system/etcd-snapshot-sync.service.d/override.conf
 ```
 
 `ExecStartPost` only runs when the rsync succeeded, so a failed sync shows up as
-a missing ping.
+a missing ping. The leading `-` keeps an unreachable watcher from marking the
+sync itself failed.
 
 ## Verify
 

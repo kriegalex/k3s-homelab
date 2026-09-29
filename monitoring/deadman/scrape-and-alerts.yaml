@@ -2,7 +2,7 @@
 # The cluster watches the watcher: Prometheus scrapes Healthchecks on homelab1,
 # so a dead watcher pages through the normal Alertmanager -> ntfy path, and a
 # failed check is visible in-cluster as well as through Healthchecks' own
-# notification. Replace PROJECT_UUID (not a secret; the token is).
+# notification. The project UUID is not a secret; the token is.
 apiVersion: monitoring.coreos.com/v1alpha1
 kind: ScrapeConfig
 metadata:
@@ -14,7 +14,7 @@ spec:
   jobName: healthchecks
   scrapeInterval: 60s
   scheme: HTTP
-  metricsPath: /projects/PROJECT_UUID/metrics/
+  metricsPath: /projects/ab9a15fd-fc82-4422-ae6c-8b46a036dc1f/metrics/
   authorization:
     type: Bearer
     credentials:
