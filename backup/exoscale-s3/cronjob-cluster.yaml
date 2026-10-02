@@ -42,9 +42,8 @@
 # Each source must also show a RECENT object or the job fails (KubeJobFailed):
 # syncing from a bucket that stopped receiving WAL would quietly age the
 # off-site copy out.
-# NOTE the Exoscale key still has full control (finding B-4). Bucket versioning
-# closes that, but only together with a lifecycle rule expiring noncurrent
-# versions — versioning alone keeps every archived-then-purged object forever.
+# The bucket is versioned with lifecycle rules (README: Bucket versioning and
+# lifecycle), but this job's key can still delete noncurrent versions.
 apiVersion: batch/v1
 kind: CronJob
 metadata:

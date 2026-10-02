@@ -50,11 +50,9 @@ both already covered. The one-line change to enable it is commented in
 - **Mode:** `rclone sync --backup-dir` — the destination mirrors the source, and
   whatever a run would delete or overwrite is moved into a dated archive
   instead (see *Retention*). A local deletion or corruption cannot destroy the
-  off-site copy, and nothing is kept forever. The Exoscale key still has full
-  control of the bucket; versioning closes that, but only with a lifecycle rule
-  that expires noncurrent versions (`NoncurrentVersionExpiration`, Early Access
-  at Exoscale — ask support), otherwise every purged object lives on as a
-  version and the bucket grows without bound.
+  off-site copy, and nothing is kept forever. The bucket is also versioned,
+  with a lifecycle rule that bounds the old versions (see *Bucket versioning
+  and lifecycle*).
 
 ## Retention
 
@@ -214,11 +212,11 @@ control-plane toleration are what put it there.
 
 ## Bucket versioning and lifecycle
 
-Versioning is what lets the off-site copy survive its own credentials: the
-in-cluster key can delete objects, but a deleted or overwritten object stays
-recoverable as a noncurrent version. On its own it would break the retention
-rule — every file the jobs purge from the archive would live on as a version
-forever — so it is only ever enabled **together with** `lifecycle.json`:
+The bucket has versioning enabled: an object that is deleted or overwritten
+stays recoverable as a noncurrent version. On its own versioning would break
+the retention rule — every file the jobs purge from the archive would live on
+as a version forever — so it runs **together with** the rules in
+`lifecycle.json`:
 
 | Rule | Effect |
 |------|--------|
@@ -230,14 +228,20 @@ Worst-case lifetime of a deleted file is therefore `KEEP_DAYS` in the archive
 plus 30 days as a noncurrent version of the purged archive copy (120 days for
 user data, 60 for cluster state).
 
-Bucket Lifecycle is an Early Access feature at Exoscale and has to be enabled
-for the organisation by support first. Apply the rules **before** versioning,
-in the same sitting, with the `exo` CLI (`paru -S exoscale-cli`):
+Versioning protects against accidental deletion (a bad sync, a script bug),
+not against a stolen in-cluster key: that key can still delete noncurrent
+versions and change the bucket's versioning and lifecycle settings.
+
+Both settings are managed with the `exo` CLI (`paru -S exoscale-cli`), using a
+workstation API key whose IAM role is limited to the `sos` service — not the
+in-cluster key. Never enable versioning on a bucket without the lifecycle
+rules; when recreating the bucket, apply them first:
 
 ```fish
-exo storage bucket lifecycle set sos://<bucket> backup/exoscale-s3/lifecycle.json -z <zone>
-exo storage bucket versioning enable sos://<bucket> -z <zone>
-exo storage bucket versioning status sos://<bucket> -z <zone>
+exo storage bucket lifecycle set sos://k3s-homelab-backup backup/exoscale-s3/lifecycle.json -z ch-gva-2
+exo storage bucket versioning enable sos://k3s-homelab-backup -z ch-gva-2
+exo storage bucket lifecycle show sos://k3s-homelab-backup -z ch-gva-2
+exo storage bucket versioning status sos://k3s-homelab-backup -z ch-gva-2
 ```
 
 Lifecycle evaluation runs daily at midnight UTC. Restoring a noncurrent
