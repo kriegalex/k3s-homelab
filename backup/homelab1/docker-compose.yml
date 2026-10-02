@@ -1,0 +1,28 @@
+# Nightly backup of homelab1 (10.0.0.50) to the QNAP — Gitea, Home Assistant,
+# Healthchecks and every stack's compose/.env. Runs on homelab1 itself with
+# Docker Compose (stack directory /opt/stacks/backup). See README.md.
+services:
+  backup:
+    build: .
+    image: homelab1-backup:local
+    container_name: homelab1-backup
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: Europe/Brussels
+    volumes:
+      # Read-only, as root: Gitea's data and HA's backups are not world-readable.
+      - /opt/stacks:/src/stacks:ro
+      - healthchecks-data:/src/healthchecks:ro
+    networks:
+      - gitea-network               # pg_dump reaches gitea-postgresql by name
+
+networks:
+  gitea-network:
+    external: true
+    name: gitea_gitea-network
+
+volumes:
+  healthchecks-data:
+    external: true
+    name: healthchecks_healthchecks-data

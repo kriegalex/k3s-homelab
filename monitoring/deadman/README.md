@@ -41,6 +41,7 @@ Watchdog route in `monitoring/values.yaml`, the `HC_URL` pings in both
 | `exoscale-data` | `exoscale-s3-backup` CronJob: `/start`, then exit status | cron `0 2 * * *`, Europe/Brussels | 2 h |
 | `exoscale-cluster` | `exoscale-s3-cluster-backup` CronJob: `/start`, then exit status | cron `30 3 * * *`, Europe/Brussels | 1 h |
 | `etcd-snapshot-sync` | systemd unit on k3s-server1 (`ExecStartPost`) | cron `0 4 * * *`, UTC | 1 h |
+| `homelab1-backup` | `backup/homelab1` stack on homelab1: `/start`, then exit status | cron `30 1 * * *`, Europe/Brussels | 1 h |
 
 Each check's time zone must match its sender: the CronJobs set
 `timeZone: Europe/Brussels`, the etcd timer uses `OnCalendar=… UTC`.
@@ -67,7 +68,7 @@ Open `http://10.0.0.50:8000`, then:
    string (`openssl rand -hex 16`; the topic name is the only secret on
    ntfy.sh), priority **5** for down and 3 for up. Subscribe to that topic in
    the ntfy phone app (add it under server `https://ntfy.sh`). Press *Test*.
-2. Create the four checks from the table above, all using that integration.
+2. Create the checks from the table above, all using that integration.
 3. **Project Settings → API Access**: create a **read-only** key; note the
    project UUID from the browser's address bar.
 

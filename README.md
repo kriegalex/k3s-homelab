@@ -20,7 +20,7 @@ Core cluster infrastructure for ingress, storage, database, backup, and monitori
 - **Database Layer**
   - [cloudnative-pg](database/cloudnative-pg/) - PostgreSQL operator for HA database clusters
 
-- **Backup Layer** - CNPG barman → QNAP S3 (weekly) + Longhorn → S3 (weekly) + [Exoscale SOS rclone mirror](backup/exoscale-s3/); see [claude-docs/backup-strategy.md](claude-docs/backup-strategy.md) for full posture
+- **Backup Layer** - CNPG barman → QNAP S3 (weekly) + Longhorn → S3 (weekly) + [Exoscale SOS rclone mirror](backup/exoscale-s3/) + off-cluster [homelab1 → QNAP S3](backup/homelab1/) (Gitea, Home Assistant, Healthchecks; nightly); see [claude-docs/backup-strategy.md](claude-docs/backup-strategy.md) for full posture
 
 - **Monitoring Layer**
   - [prometheus](monitoring/) - Prometheus + Grafana stack (kube-prometheus-stack)
