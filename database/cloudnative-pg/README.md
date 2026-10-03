@@ -88,7 +88,7 @@ helm upgrade --install cnpg cnpg/cloudnative-pg \
   --namespace cnpg-system \
   --create-namespace \
   -f values.yaml \
-  --version 0.29.0
+  --version 0.29.1
 ```
 
 ### Step 3: Verify Installation

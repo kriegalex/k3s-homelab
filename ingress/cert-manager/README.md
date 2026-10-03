@@ -34,7 +34,7 @@ This guide covers:
 **IMPORTANT:** cert-manager requires CRDs to be installed separately before the Helm chart.
 
 ```bash
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.17.1/cert-manager.crds.yaml
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.21.2/cert-manager.crds.yaml
 ```
 
 ### Step 2: Add Helm Repository
@@ -50,7 +50,7 @@ helm repo update
 helm upgrade --install cert-manager jetstack/cert-manager \
   --namespace cert-manager \
   --create-namespace \
-  --version v1.17.1 \
+  --version v1.21.2 \
   -f values.yaml
 ```
 
