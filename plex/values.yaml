@@ -67,7 +67,10 @@ pms:
       gpu.intel.com/i915: "1"
       memory: 16Gi
     requests:
-      cpu: 1000m
+      # 4 cores: Plex's ffmpeg bursts (intro/credit detection, peak ~7.5
+      # cores) win any CPU contention on worker1 against the media apps,
+      # which no longer avoid this node
+      cpu: 4000m
       gpu.intel.com/i915: "1"
       memory: 8Gi
   storageClassName: longhorn

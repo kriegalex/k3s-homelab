@@ -12,17 +12,6 @@ resources:
     cpu: 2000m
     memory: 1Gi
 
-affinity:
-  nodeAffinity:
-    preferredDuringSchedulingIgnoredDuringExecution:
-      - weight: 100
-        preference:
-          matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: In
-              values:
-                - k3s-worker3
-
 env:
   PUID: "1000"
   PGID: "1000"

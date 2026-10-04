@@ -1,27 +1,4 @@
 # sonarr-anime — chart: alekc/sonarr v1.8.5. Real deployed values (source of truth).
-affinity:
-  nodeAffinity:
-    preferredDuringSchedulingIgnoredDuringExecution:
-    - preference:
-        matchExpressions:
-        - key: kubernetes.io/hostname
-          operator: In
-          values:
-          - k3s-worker3
-      weight: 100
-  podAntiAffinity:
-    preferredDuringSchedulingIgnoredDuringExecution:
-    - podAffinityTerm:
-        labelSelector:
-          matchExpressions:
-          - key: app.kubernetes.io/name
-            operator: In
-            values:
-            - plex-media-server
-        namespaces:
-        - plex
-        topologyKey: kubernetes.io/hostname
-      weight: 80
 image:
   pullPolicy: IfNotPresent
   repository: ghcr.io/hotio/sonarr
