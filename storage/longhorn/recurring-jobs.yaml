@@ -25,7 +25,7 @@ spec:
   name: weekly-backup-tier2
   cron: "30 3 * * 0"           # Sun 03:30 UTC (after tier1 finishes)
   task: backup
-  groups: ["tier2"]
+  groups: ["tier2", "tier2-churn"]
   retain: 4
   concurrency: 4
   parameters:
@@ -59,6 +59,23 @@ spec:
   retain: 7                    # keep 7 days
   concurrency: 4
 ---
+# tier2-churn: tier2 volumes whose data rewrites itself constantly (nostr-strfry's
+# LMDB writes ~13 GiB/day into a 36 GiB database). Seven dailies held 10-30 GiB each
+# and turned every replica rebuild into hours of block-by-block hashing. One daily
+# keeps the never-checksummed volume head small without paying for the history.
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: daily-snapshot-churn
+  namespace: longhorn-system
+spec:
+  name: daily-snapshot-churn
+  cron: "30 0 * * *"           # daily at 00:30 UTC
+  task: snapshot
+  groups: ["tier2-churn"]
+  retain: 1
+  concurrency: 1
+---
 apiVersion: longhorn.io/v1beta2
 kind: RecurringJob
 metadata:
@@ -71,6 +88,6 @@ spec:
                                # already-removed snapshots only; valid snapshots are
                                # immutable, so space frozen in retained snapshots frees
                                # up progressively as they age out of retention
-  groups: ["tier1", "tier2"]
+  groups: ["tier1", "tier2", "tier2-churn"]
   retain: 1                    # not used by this task, but the CRD requires >= 1
   concurrency: 2

@@ -20,6 +20,9 @@ defaultSettings:
   # Auto-clean orphaned replica data dirs / instances (grace 300s; never touches
   # orphans on down/unknown nodes)
   orphanResourceAutoDeletion: "replica-data;instance"
+  # Hash each snapshot right after creation so replica rebuilds can skip it
+  # (fast rebuild) instead of waiting for the weekly integrity cron
+  snapshotDataIntegrityImmediateCheckAfterSnapshotCreation: '{"v1":"true","v2":"false"}'
 
 # Ingress configuration for Longhorn UI
 ingress:
