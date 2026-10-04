@@ -5,7 +5,8 @@
 # Same bounded scheme as backup/exoscale-s3/: `rclone sync --backup-dir`
 # mirrors each source, and whatever a run would delete or overwrite is moved to
 # hl1:_archive/<run date>/ and purged after KEEP_DAYS. A source that fails its
-# check is skipped (its mirror is left untouched) and the run exits 1.
+# check is skipped (its mirror is left untouched), a failed sync does not stop
+# the others, and either way the run exits 1.
 set -eu
 
 # Dead-man's switch (monitoring/deadman): /start now, the exit status at the end.
@@ -38,7 +39,8 @@ fi
 if [ "$DUMPS_OK" = yes ]; then
   echo "===== sync dumps ====="
   # shellcheck disable=SC2086
-  rclone sync "$STAGE" hl1:dumps --backup-dir "hl1:$ARCHIVE/$TODAY/dumps" $COMMON
+  rclone sync "$STAGE" hl1:dumps --backup-dir "hl1:$ARCHIVE/$TODAY/dumps" $COMMON \
+    || { echo "ERROR: sync of dumps failed" >&2; STALE="$STALE dumps-sync"; }
 fi
 
 # --- /opt/stacks: compose files, .env, Gitea files, HA backup archives -------
@@ -66,7 +68,8 @@ else
     --filter '- /gitea/data/gitea/indexers/**' \
     --filter '+ /homeassistant/config/backups/**' \
     --filter '- /homeassistant/config/**' \
-    --filter '+ **'
+    --filter '+ **' \
+    || { echo "ERROR: sync of stacks failed" >&2; STALE="$STALE stacks-sync"; }
 fi
 
 # --- prune archive days older than KEEP_DAYS ---------------------------------

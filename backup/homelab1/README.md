@@ -45,6 +45,7 @@ the run exits 1, which the Healthchecks check turns into a page:
 | `gitea-db`, `healthchecks-db` | the dump fails (the dumps are then not synced at all) |
 | `stacks` | `/opt/stacks/gitea/data/gitea/conf/app.ini` is missing — an empty or unmounted source |
 | `ha-backup` | no HA backup newer than 2 days; the stacks sync still runs |
+| `dumps-sync`, `stacks-sync` | the upload fails; the other sync and the archive prune still run |
 
 ## Install
 
