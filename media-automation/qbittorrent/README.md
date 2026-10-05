@@ -185,11 +185,19 @@ Current state:
 
 | release | limit | `disk_cache` | queueing | torrents |
 |---|---|---|---|---|
-| qbit-media | 8Gi | **1024 MiB** (pinned) | disabled | ~1318 |
+| qbit-media | 12Gi | **1024 MiB** (pinned) | disabled | ~1318 |
 | qbit-anime | 4Gi | `-1` (auto) | enabled, 200 active | ~221 |
 
 qbit-anime is on auto but has never OOM'd — queueing caps its concurrency and it
 sits flat at ~1.15 GiB. Pin it too if it ever starts spiking.
+
+The limit also has to absorb NFS writeback. Downloads land on the Unraid `data` share,
+and when qbit-media downloads faster (global cap `dl_limit` ≈ 81 MiB/s) than the
+NFS path drains (~55 MB/s), pages under writeback pile up in the pod's cgroup. They
+count against the limit and cannot be reclaimed until Unraid acknowledges them, so a
+long burst can OOM the pod even though qbittorrent's RSS stays ~1.5 GiB. Watch
+`node_memory_Writeback_bytes` on the pod's node; if 12Gi is still not enough, lower
+`dl_limit` below the NFS drain rate instead of raising the limit further.
 
 Note: `checking_memory_use` (default 32 MiB) is the *recheck* buffer — raising it
 increases memory use, so leave it alone when chasing OOMs.
