@@ -1,0 +1,21 @@
+# LAN entry point for ntfy e-mail publishing (see the smtp block in values.yaml).
+# The chart's ntfy-smtp Service can't take annotations, so the pinned MetalLB
+# IP lives here; the QNAP's Notification Center sends to 10.0.0.25:25.
+# LAN-only — no router port-forward. Apply with kubectl after the helm release.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ntfy-smtp-lan
+  namespace: ntfy
+  annotations:
+    metallb.io/loadBalancerIPs: 10.0.0.25
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: ntfy
+    app.kubernetes.io/instance: ntfy
+  ports:
+    - name: smtp
+      port: 25
+      targetPort: smtp
+      protocol: TCP

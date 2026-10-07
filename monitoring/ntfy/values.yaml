@@ -1,18 +1,18 @@
-# ntfy server — chart: oci://codeberg.org/wrenix/helm-charts/ntfy v0.5.15
+# ntfy server — chart: oci://codeberg.org/wrenix/helm-charts/ntfy v0.5.19
 # Committed source of truth. The gitignored helm-values.yaml in this folder
 # is a live-values snapshot (see scripts/extract-helm-values.sh).
 #
 # Only fields that DIFFER from the chart's upstream defaults are listed here,
 # so this file doubles as a diff against upstream. To inspect the full
 # effective config, run:
-#   helm show values oci://codeberg.org/wrenix/helm-charts/ntfy --version 0.5.15
+#   helm show values oci://codeberg.org/wrenix/helm-charts/ntfy --version 0.5.19
 #
 # Install:
 #   kubectl create namespace ntfy
 #   kubectl apply -f ntfy-secrets.yaml   # see README and secrets-template.yaml
 #   # + create the ntfy-web-push-email Secret (see secrets-template.yaml)
 #   helm upgrade --install ntfy oci://codeberg.org/wrenix/helm-charts/ntfy \
-#     --version 0.5.15 -n ntfy -f values.yaml
+#     --version 0.5.19 -n ntfy -f values.yaml
 
 ntfy:
   # Must match the public URL Traefik routes to ntfy — otherwise web-push
@@ -53,12 +53,30 @@ ntfy:
       create: true
     emailAddress: "admin@lourenco.ch"
 
+  # E-mail publishing: ntfy's built-in SMTP listener turns incoming mail into
+  # messages (subject → title, body → message). The QNAP's Notification Center
+  # has no webhook channel, so it mails alerts here. LAN-only: reached through
+  # the pinned MetalLB IP in ntfy-smtp-lb.yaml, never port-forwarded. The domain
+  # has no MX record and needs none — senders connect to the IP directly and
+  # address <topic>+<token>@ntfy.lourenco.ch (deny-all applies to mail too).
+  smtp:
+    server:
+      domain: "ntfy.lourenco.ch"
+
 # Injects NTFY_WEB_PUSH_EMAIL_ADDRESS from the manually created Secret
 # (shape in secrets-template.yaml). Appended after the chart's own
 # ntfy-env ConfigMap/Secret refs; distinct keys, no collision.
 envFrom:
   - secretRef:
       name: ntfy-web-push-email
+
+# Enables the SMTP listener (NTFY_SMTP_SERVER_LISTEN) and its container port.
+# The chart's own ntfy-smtp Service can't carry annotations, so it stays
+# ClusterIP; the LAN-facing LoadBalancer with a pinned IP is ntfy-smtp-lb.yaml.
+service:
+  smtp:
+    enabled: true
+    type: ClusterIP
 
 persistence:
   enabled: true
