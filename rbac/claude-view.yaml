@@ -2,9 +2,10 @@
 #
 # The agent's default kubeconfig (~/.kube/claude-view.yaml) authenticates as this
 # ServiceAccount, so secret exposure is refused by the API server instead of by
-# command-text matching. Deliberately NOT granted: secrets, pods/exec,
-# pods/portforward, nodes/proxy, helmcharts.helm.cattle.io (valuesContent can
-# carry credentials), bgppeers.metallb.io (inline password), hub.traefik.io.
+# command-text matching. Deliberately NOT granted: secrets, pods/exec (except the
+# dealwatch CNPG pods, see claude-view-db-exec at the end), pods/portforward,
+# nodes/proxy, helmcharts.helm.cattle.io (valuesContent can carry credentials),
+# bgppeers.metallb.io (inline password), hub.traefik.io.
 #
 # Apply (admin kubeconfig; Claude sessions default to the view-only one):
 #         kubectl --kubeconfig ~/.kube/config --context=default apply -f rbac/claude-view.yaml
@@ -144,6 +145,36 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: claude-view-metrics-proxy
+subjects:
+  - kind: ServiceAccount
+    name: claude-view
+    namespace: claude-agent
+---
+# Read-only SQL for the dealwatch analytics work. pods/exec cannot be limited to a
+# command, so this trusts the agent not to write; ~/.claude/hooks/cluster-guard.py
+# refuses DROP/TRUNCATE/rm -r payloads. Scoped to the CNPG instance pods (local-socket
+# auth, no password in their env), never the app pods whose env carries DATABASE_URL.
+# Names 1-6 cover instance re-creations after failovers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: claude-view-db-exec
+  namespace: dealwatch
+rules:
+  - apiGroups: [""]
+    resources: [pods/exec]
+    resourceNames: [dealwatch-db-1, dealwatch-db-2, dealwatch-db-3, dealwatch-db-4, dealwatch-db-5, dealwatch-db-6]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: claude-view-db-exec
+  namespace: dealwatch
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: claude-view-db-exec
 subjects:
   - kind: ServiceAccount
     name: claude-view
