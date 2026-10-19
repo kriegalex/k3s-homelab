@@ -57,15 +57,14 @@ kubectl create secret generic immich-db-credentials \
 - Database credentials secret must be created (see above)
 - Update values.yaml to use secrets via envFrom
 
-```bash
-helm repo add immich-charts https://immich-app.github.io/immich-charts
-helm repo update
+The chart is published only as an OCI artifact (the old `https://immich-app.github.io/immich-charts` HTTP repo is retired; its last version is 0.12.0):
 
+```bash
 # View default values
-helm show values immich-charts/immich > values.yaml
+helm show values oci://ghcr.io/immich-app/immich-charts/immich --version 0.13.4
 ```
 
-> Adapt any needed values. Check [the original repository](https://github.com/immich-app/immich-charts) for more information.
+> Adapt any needed values. Check [the original repository](https://github.com/immich-app/immich-charts) for more information. Since chart 0.13 the values are validated against a JSON schema, so every persistence item must be a complete entry (a bare `enabled: false` override fails). The image tag is not bumped by the chart — set `controllers.main.containers.main.image.tag` explicitly.
 
 **Important:** Ensure your `values.yaml` uses secrets:
 ```yaml
@@ -83,11 +82,14 @@ controllers:
 ```
 
 ```bash
-helm upgrade --install immich immich-charts/immich \
+helm upgrade --install immich oci://ghcr.io/immich-app/immich-charts/immich \
+  --version 0.13.4 \
   -n immich \
   --create-namespace \
   -f values.yaml
 ```
+
+A `403 denied` from ghcr.io on pull means Helm is sending a stale ghcr credential; the chart is public, so pull anonymously (`DOCKER_CONFIG` pointing at a directory with an empty `config.json`) or log out of ghcr.io.
 
 ## Uninstall
 

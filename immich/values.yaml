@@ -9,7 +9,7 @@ controllers:
     containers:
       main:
         image:
-          tag: v2.7.5
+          tag: v3.3.3
         env:
           REDIS_HOSTNAME: '{{ printf "%s-valkey" .Release.Name }}'
           IMMICH_MACHINE_LEARNING_URL: '{{ printf "http://%s-machine-learning:3003" .Release.Name }}'
@@ -40,11 +40,6 @@ immich:
     #   enabled: true
     #   template: "{{y}}/{{y}}-{{MM}}-{{dd}}/{{filename}}"
 
-persistence:
-  external:
-    enabled: true
-    existingClaim: "nfs-nextcloud-ro"
-
 # Dependencies
 
 valkey:
@@ -61,12 +56,6 @@ valkey:
               cpu: 200m
               memory: 256Mi
   persistence:
-    # The shared top-level persistence.external (nfs-nextcloud-ro — the read-only
-    # Nextcloud photo library) is merged into every immich component. valkey is
-    # just redis and has no use for it, so disable it here: no point carrying a
-    # pointless NFS mount, and it keeps redis off the NFS stale-handle path.
-    external:
-      enabled: false
     data:
       enabled: true
       size: 1Gi
@@ -91,6 +80,14 @@ valkey:
 
 server:
   enabled: true
+  persistence:
+    # Read-only Nextcloud photo library, imported as an external library. Only
+    # the server reads it — machine-learning gets image data from the server over
+    # HTTP and valkey is just redis — so it is not set at the top level, which
+    # would merge it into every component.
+    external:
+      enabled: true
+      existingClaim: "nfs-nextcloud-ro"
   controllers:
     main:
       containers:
