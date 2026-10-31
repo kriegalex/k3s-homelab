@@ -1,19 +1,19 @@
-# cert-manager DNS-01 webhook for Infomaniak — upstream rendered manifest, image PINNED.
+# cert-manager DNS-01 webhook for Infomaniak — upstream's rendered manifest for v0.5.0.
 #
-# Source: https://github.com/Infomaniak/cert-manager-webhook-infomaniak/releases/download/v0.3.1/rendered-manifest.yaml
-# with the one change that matters: the image tag. Upstream renders `:latest`,
-# and that is how the 2026-10-04 node reboots silently upgraded this pod to
-# v0.5.0, which talks to Infomaniak's API v2 and needs a token with the
-# `dns:read` + `dns:write` scopes. The token in Secret
-# `cert-manager/infomaniak-api-credentials` has the legacy `domain` scope, so
-# every renewal failed with `not_authorized` for four weeks and nothing alerted
-# (monitoring/cert-manager-alerts.yaml now covers that).
+# Source: https://github.com/Infomaniak/cert-manager-webhook-infomaniak/releases/download/v0.5.0/rendered-manifest.yaml
+# unchanged (the image is pinned to `0.5.0` upstream since v0.4.2). Older releases rendered
+# `:latest`; that is how this Deployment, applied by hand in 2025 and never committed, was
+# silently upgraded when the 2026-10-04 node reboots rescheduled its pod.
 #
-# v0.3.1 is the last release on the legacy API and works with the current
-# token. To move to 0.5.0: regenerate the API token with `dns:read` +
-# `dns:write` at https://manager.infomaniak.com/v3/infomaniak-api, update the
-# Secret, then replace this file with the v0.5.0 rendered manifest (it also
-# switches the container to port 8443 and adds a securityContext).
+# Since v0.4.0 the webhook uses Infomaniak's API v2 (zones + DNS records). The API token in
+# Secret `cert-manager/infomaniak-api-credentials` (key `api-token`) must carry the scopes
+# `dns:read` and `dns:write`; the legacy `domain` scope is refused with `not_authorized`.
+# Tokens are created at https://manager.infomaniak.com/v3/infomaniak-api. Rotate the Secret
+# with:
+#   kubectl -n cert-manager create secret generic infomaniak-api-credentials \
+#     --from-literal=api-token=<token> --dry-run=client -o yaml | kubectl apply -f -
+# No restart needed; the webhook reads the Secret per request. cert-manager retries pending
+# Challenges on its own.
 #
 # Apply: kubectl apply -f ingress/cert-manager/infomaniak-webhook.yaml
 ---
@@ -24,7 +24,7 @@ metadata:
   name: "cert-manager-infomaniak"
   labels:
     app: infomaniak-webhook
-    chart: infomaniak-webhook-0.2.0
+    chart: infomaniak-webhook-0.5.0
     release: infomaniak-webhook
     heritage: Helm
 ---
@@ -36,7 +36,7 @@ metadata:
   namespace: "cert-manager-infomaniak"
   labels:
     app: infomaniak-webhook
-    chart: infomaniak-webhook-0.2.0
+    chart: infomaniak-webhook-0.5.0
     release: infomaniak-webhook
     heritage: Helm
 ---
@@ -48,7 +48,7 @@ metadata:
   name: infomaniak-webhook:domain-solver
   labels:
     app: infomaniak-webhook
-    chart: infomaniak-webhook-0.2.0
+    chart: infomaniak-webhook-0.5.0
     release: infomaniak-webhook
     heritage: Helm
 rules:
@@ -68,7 +68,7 @@ metadata:
   name: infomaniak-webhook:auth-delegator
   labels:
     app: infomaniak-webhook
-    chart: infomaniak-webhook-0.2.0
+    chart: infomaniak-webhook-0.5.0
     release: infomaniak-webhook
     heritage: Helm
 roleRef:
@@ -88,7 +88,7 @@ metadata:
   name: infomaniak-webhook:domain-solver
   labels:
     app: infomaniak-webhook
-    chart: infomaniak-webhook-0.2.0
+    chart: infomaniak-webhook-0.5.0
     release: infomaniak-webhook
     heritage: Helm
 roleRef:
@@ -110,14 +110,15 @@ metadata:
   namespace: cert-manager
   labels:
     app: infomaniak-webhook
-    chart: infomaniak-webhook-0.2.0
+    chart: infomaniak-webhook-0.5.0
     release: infomaniak-webhook
     heritage: Helm
 rules:
   - apiGroups: [""]
     resources:
       - 'secrets'
-    resourceNames: [infomaniak-api-credentials]
+    resourceNames:
+      - "infomaniak-api-credentials"
     verbs:
       - 'get'
       - 'watch'
@@ -135,7 +136,7 @@ metadata:
   namespace: kube-system
   labels:
     app: infomaniak-webhook
-    chart: infomaniak-webhook-0.2.0
+    chart: infomaniak-webhook-0.5.0
     release: infomaniak-webhook
     heritage: Helm
 roleRef:
@@ -156,7 +157,7 @@ metadata:
   namespace: cert-manager
   labels:
     app: infomaniak-webhook
-    chart: infomaniak-webhook-0.2.0
+    chart: infomaniak-webhook-0.5.0
     release: infomaniak-webhook
     heritage: Helm
 roleRef:
@@ -177,7 +178,7 @@ metadata:
   namespace: "cert-manager-infomaniak"
   labels:
     app: infomaniak-webhook
-    chart: infomaniak-webhook-0.2.0
+    chart: infomaniak-webhook-0.5.0
     release: infomaniak-webhook
     heritage: Helm
 spec:
@@ -199,7 +200,7 @@ metadata:
   namespace: "cert-manager-infomaniak"
   labels:
     app: infomaniak-webhook
-    chart: infomaniak-webhook-0.2.0
+    chart: infomaniak-webhook-0.5.0
     release: infomaniak-webhook
     heritage: Helm
 spec:
@@ -217,18 +218,19 @@ spec:
       serviceAccountName: infomaniak-webhook
       containers:
         - name: infomaniak-webhook
-          image: "ghcr.io/infomaniak/cert-manager-webhook-infomaniak:v0.3.1"
+          image: "ghcr.io/infomaniak/cert-manager-webhook-infomaniak:0.5.0"
           imagePullPolicy: IfNotPresent
           args:
             - --v=2
             - --tls-cert-file=/tls/tls.crt
             - --tls-private-key-file=/tls/tls.key
+            - --secure-port=8443
           env:
             - name: GROUP_NAME
               value: "acme.infomaniak.com"
           ports:
             - name: https
-              containerPort: 443
+              containerPort: 8443
               protocol: TCP
           livenessProbe:
             httpGet:
@@ -246,6 +248,17 @@ spec:
               readOnly: true
           resources:
             {}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 1000
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
       volumes:
         - name: certs
           secret:
@@ -258,7 +271,7 @@ metadata:
   name: v1alpha1.acme.infomaniak.com
   labels:
     app: infomaniak-webhook
-    chart: infomaniak-webhook-0.2.0
+    chart: infomaniak-webhook-0.5.0
     release: infomaniak-webhook
     heritage: Helm
   annotations:
@@ -281,7 +294,7 @@ metadata:
   namespace: "cert-manager-infomaniak"
   labels:
     app: infomaniak-webhook
-    chart: infomaniak-webhook-0.2.0
+    chart: infomaniak-webhook-0.5.0
     release: infomaniak-webhook
     heritage: Helm
 spec:
@@ -301,7 +314,7 @@ metadata:
   namespace: "cert-manager-infomaniak"
   labels:
     app: infomaniak-webhook
-    chart: infomaniak-webhook-0.2.0
+    chart: infomaniak-webhook-0.5.0
     release: infomaniak-webhook
     heritage: Helm
 spec:
@@ -324,7 +337,7 @@ metadata:
   namespace: "cert-manager-infomaniak"
   labels:
     app: infomaniak-webhook
-    chart: infomaniak-webhook-0.2.0
+    chart: infomaniak-webhook-0.5.0
     release: infomaniak-webhook
     heritage: Helm
 spec:
@@ -339,7 +352,7 @@ metadata:
   namespace: "cert-manager-infomaniak"
   labels:
     app: infomaniak-webhook
-    chart: infomaniak-webhook-0.2.0
+    chart: infomaniak-webhook-0.5.0
     release: infomaniak-webhook
     heritage: Helm
 spec:

@@ -104,19 +104,16 @@ Infomaniak is a Swiss hosting provider with excellent DNS services. cert-manager
 #### 1.1. Install Infomaniak Webhook
 
 The webhook is **not** Helm-managed here: `infomaniak-webhook.yaml` is upstream's rendered
-manifest (release v0.3.1) with the image pinned to `v0.3.1`, deployed into namespace
-`cert-manager-infomaniak`. Upstream renders `:latest`; never apply that — see the header of the
-file for how `:latest` broke every renewal in October 2026.
+manifest for release v0.5.0 (image pinned to `0.5.0`), deployed into namespace
+`cert-manager-infomaniak`. Never apply an older rendered manifest: those use `:latest`.
 
 ```bash
 kubectl apply -f infomaniak-webhook.yaml
 ```
 
-Upgrading to v0.5.0 (Infomaniak API v2) first needs a new API token with the `dns:read` and
-`dns:write` scopes in the Secret below; the legacy `domain` scope is refused with
-`not_authorized`.
-
-**Reference:** [Infomaniak cert-manager webhook](https://github.com/Infomaniak/cert-manager-webhook-infomaniak)
+Since v0.4.0 the webhook uses Infomaniak's API v2, so the API token (next step) needs the
+`dns:read` and `dns:write` scopes; a legacy `domain`-scope token is refused with
+`not_authorized` and every renewal silently stalls (alerting: `monitoring/cert-manager-alerts.yaml`).
 
 #### 1.2. Get Infomaniak API Token
 
