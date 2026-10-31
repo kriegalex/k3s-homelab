@@ -1,0 +1,61 @@
+---
+# cert-manager alerting. kube-prometheus-stack ships none, and the cert-manager
+# chart only exposes the metrics (ServiceMonitor in ingress/cert-manager/values.yaml).
+#
+# Motivating case (found 2026-10-31): the Infomaniak DNS-01 webhook had been
+# failing every renewal since 2026-10-04 (`:latest` image drift broke the API
+# token). Five certificates sat in "Issuing" for up to 15 days, the closest one
+# 15 days from expiry, and nothing fired — the Certificates stayed Ready=True
+# because the old cert was still valid.
+#
+# Let's Encrypt certs live 90 d and cert-manager renews 30 d before expiry, so a
+# renewal that has been due for more than 2 d is already a failure, long before
+# the expiry alerts below.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cert-manager-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus   # required, or the Prometheus CR silently ignores this rule
+spec:
+  groups:
+    - name: cert-manager
+      rules:
+        - alert: CertManagerRenewalOverdue
+          expr: |
+            (time() - certmanager_certificate_renewal_timestamp_seconds) > 2 * 86400
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Certificate {{ $labels.namespace }}/{{ $labels.name }} renewal overdue"
+            description: "Renewal was scheduled {{ $value | humanizeDuration }} ago and has not completed. Check the Order/Challenge in that namespace and the DNS-01 webhook logs (cert-manager-infomaniak)."
+        - alert: CertManagerCertExpirySoon
+          expr: |
+            (certmanager_certificate_expiration_timestamp_seconds - time()) < 14 * 86400
+          for: 1h
+          labels:
+            severity: critical
+          annotations:
+            summary: "Certificate {{ $labels.namespace }}/{{ $labels.name }} expires in {{ $value | humanizeDuration }}"
+            description: "Less than 14 days left and renewal has not succeeded. Service breaks at expiry."
+        - alert: CertManagerCertNotReady
+          expr: |
+            certmanager_certificate_ready_status{condition="False"} == 1
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Certificate {{ $labels.namespace }}/{{ $labels.name }} is not Ready"
+            description: "cert-manager reports the Certificate as not Ready for 15m."
+        - alert: CertManagerIssuerNotReady
+          expr: |
+            certmanager_clusterissuer_ready_status{condition="False"} == 1
+              or certmanager_issuer_ready_status{condition="False"} == 1
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "cert-manager issuer {{ $labels.name }} is not Ready"
+            description: "No certificate from this issuer can be issued or renewed while it is not Ready."
