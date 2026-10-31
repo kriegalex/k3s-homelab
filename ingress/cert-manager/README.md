@@ -103,14 +103,18 @@ Infomaniak is a Swiss hosting provider with excellent DNS services. cert-manager
 
 #### 1.1. Install Infomaniak Webhook
 
-```bash
-# Install the Infomaniak webhook for cert-manager
-helm repo add infomaniak https://infomaniak.github.io/cert-manager-webhook-infomaniak
-helm repo update
+The webhook is **not** Helm-managed here: `infomaniak-webhook.yaml` is upstream's rendered
+manifest (release v0.3.1) with the image pinned to `v0.3.1`, deployed into namespace
+`cert-manager-infomaniak`. Upstream renders `:latest`; never apply that — see the header of the
+file for how `:latest` broke every renewal in October 2026.
 
-helm install cert-manager-webhook-infomaniak infomaniak/cert-manager-webhook-infomaniak \
-  --namespace cert-manager
+```bash
+kubectl apply -f infomaniak-webhook.yaml
 ```
+
+Upgrading to v0.5.0 (Infomaniak API v2) first needs a new API token with the `dns:read` and
+`dns:write` scopes in the Secret below; the legacy `domain` scope is refused with
+`not_authorized`.
 
 **Reference:** [Infomaniak cert-manager webhook](https://github.com/Infomaniak/cert-manager-webhook-infomaniak)
 
