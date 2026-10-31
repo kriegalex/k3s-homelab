@@ -164,12 +164,32 @@ grafana:
         datasource: Prometheus
       backup-overview:
         json: ""   # populated at install time by --set-file
+      # S.M.A.R.T. of the nodes' NVMe (monitoring/smartctl-exporter)
+      smartctl-exporter:
+        gnetId: 22604
+        revision: 4
+        datasource: Prometheus
 
 prometheus:
   enabled: true
   prometheusSpec:
     podMonitorSelectorNilUsesHelmValues: false
     podMonitorSelector: {}
+    # TSDB on a PVC so history survives pod moves and node reboots (it was an
+    # emptyDir until 2026-10-31, i.e. lost on every reschedule). Sizing at
+    # deploy: ~200k series, ~7k samples/s, 7.6 GiB for 10 d -> ~23 GiB for
+    # 30 d. retentionSize is the hard guard below the claim so the volume can
+    # never fill; whichever of time/size trips first wins.
+    retention: 30d
+    retentionSize: 40GiB
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn-single-replica
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 50Gi
     affinity:
       nodeAffinity:
         preferredDuringSchedulingIgnoredDuringExecution:
