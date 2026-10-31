@@ -1,0 +1,92 @@
+# smartctl-exporter: S.M.A.R.T. health of the nodes' system disks.
+#
+# Chart: prometheus-community/prometheus-smartctl-exporter (pinned in README.md)
+# Release: smartctl-exporter, namespace monitoring.
+#
+# Every node has exactly one physical disk, a Samsung 990 PRO 2 TB NVMe at
+# /dev/nvme0n1. The workers also carry dozens of Longhorn iSCSI "VIRTUAL-DISK"
+# block devices (/dev/sdX) that come and go with volume attachments, so the
+# exporter is pinned to the NVMe instead of letting it scan: scanning would
+# probe every iSCSI target on each cycle and emit a churning set of useless
+# series.
+#
+# smartd already runs on the workers but reports to nobody; this is the
+# Prometheus side of that gap (worker3 NVMe incident, 2026-07-16).
+config:
+  devices:
+    - /dev/nvme0n1
+
+# The chart's only RBAC object is a RoleBinding to a `unrestricted-psp`
+# ClusterRole (PodSecurityPolicy era) that does not exist on this cluster.
+rbac:
+  create: false
+
+# Go exporter wrapping one smartctl call every 120 s: tiny.
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 128Mi
+
+serviceMonitor:
+  enabled: true
+  # kube-prometheus-stack's serviceMonitorSelector only matches this label.
+  extraLabels:
+    release: prometheus
+  interval: 60s
+  scrapeTimeout: 30s
+  relabelings:
+    # `instance` is the pod IP; alerts and dashboards want the node name.
+    - sourceLabels: [__meta_kubernetes_pod_node_name]
+      targetLabel: node
+
+prometheusRules:
+  enabled: true
+  extraLabels:
+    release: prometheus
+  # The chart ships the rules below with `instance`-based text; the overrides
+  # keep its expressions and thresholds unless noted, and name the node.
+  rules:
+    smartCTLDeviceMediaErrors:
+      annotations:
+        summary: "NVMe media errors on {{ $labels.node }}"
+        description: "{{ $labels.device }} on {{ $labels.node }} reports {{ $value }} media errors (uncorrectable). Plan a disk swap; Longhorn replicas on this node are at risk."
+    smartCTLDeviceCriticalWarning:
+      annotations:
+        summary: "NVMe critical warning on {{ $labels.node }}"
+        description: "{{ $labels.device }} on {{ $labels.node }} raised NVMe critical_warning bitmask {{ $value }} (spare low / over temperature / reliability degraded / read-only / volatile backup failed)."
+    smartCTLDeviceAvailableSpareUnderThreshold:
+      annotations:
+        summary: "NVMe spare blocks below threshold on {{ $labels.node }}"
+        description: "{{ $labels.device }} on {{ $labels.node }}: available spare has dropped under the drive's own threshold."
+    smartCTLDeviceStatus:
+      annotations:
+        summary: "SMART overall status FAILED on {{ $labels.node }}"
+        description: "{{ $labels.device }} on {{ $labels.node }}: smartctl reports overall health not PASSED."
+    smartCTLDDeviceTemperature:
+      # Chart default is > 60 °C for 1 m. The 990 PRO is rated to 70 °C and
+      # throttles ~82 °C; worker1 peaked at 59 °C in the 14 days before deploy,
+      # so 60 would page on normal load.
+      expr: smartctl_device_temperature{temperature_type="current"} > 70
+      for: 10m
+      annotations:
+        summary: "NVMe above 70 °C on {{ $labels.node }}"
+        description: "{{ $labels.device }} on {{ $labels.node }} at {{ $value }} °C for 10 m (drive rated to 70 °C, throttles ~82 °C)."
+    smartCTLDInterfaceSlow:
+      # SATA-only metric (link speed negotiation); NVMe exposes none, so the
+      # rule can never fire here. Re-enable if a SATA disk joins a node.
+      enabled: false
+    # Not in the chart: NVMe endurance. percentage_used passes 100 when the
+    # rated TBW is exhausted; the drive keeps working but warranty-wise it is
+    # done and failure odds climb.
+    smartCTLDevicePercentageUsed:
+      enabled: true
+      alert: SmartCTLDevicePercentageUsed
+      expr: smartctl_device_percentage_used > 90
+      for: 1h
+      annotations:
+        summary: "NVMe endurance {{ $value }}% used on {{ $labels.node }}"
+        description: "{{ $labels.device }} on {{ $labels.node }} has consumed {{ $value }}% of its rated write endurance."
+      labels:
+        severity: warning

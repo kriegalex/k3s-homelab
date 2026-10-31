@@ -63,6 +63,7 @@ declare -A MANUAL_MAPPINGS=(
     ["plugin-barman-cloud"]="database/plugin-barman-cloud"
     ["ntfy"]="monitoring/ntfy"
     ["alertmanager-ntfy"]="monitoring/alertmanager-ntfy"
+    ["smartctl-exporter"]="monitoring/smartctl-exporter"
     ["deltabadger"]="blockchain/deltabadger"
     # Media automation
     ["radarr"]="media-automation/radarr"

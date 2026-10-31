@@ -25,6 +25,7 @@ Core cluster infrastructure for ingress, storage, database, backup, and monitori
 - **Monitoring Layer**
   - [prometheus](monitoring/) - Prometheus + Grafana stack (kube-prometheus-stack)
   - [ntfy](monitoring/ntfy/), [alertmanager-ntfy](monitoring/alertmanager-ntfy/) - push notifications for alerts
+  - [smartctl-exporter](monitoring/smartctl-exporter/) - S.M.A.R.T. metrics + alerts for the nodes' NVMe disks
 
 - **Hardware Layer**
   - [intel-gpu-plugin](hardware/intel-gpu-plugin/) - Intel GPU Device Plugin for hardware transcoding
