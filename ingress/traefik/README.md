@@ -14,6 +14,7 @@ for the migration playbook.
 | IngressClass | `traefik` (NOT cluster default — every Ingress sets `ingressClassName: traefik` explicitly) |
 | Dashboard | `http://traefik.k3s.home` (IngressRoute, no auth — inside networks only, see `ingressroute-lan-only.yaml`) |
 | `*.k3s.home` | answered only for LAN, Teleport/WireGuard VPN and pod clients; everyone else gets 403 (`ingressroute-lan-only.yaml`) |
+| Public hosts (`*.lourenco.ch`, `*.21crypto.ch`) | plain HTTP is answered with a 301 to HTTPS for every host, present and future (`ingressroute-public-redirect.yaml`) |
 
 ## Files
 
@@ -23,12 +24,13 @@ ingress/traefik/
 ├── values.yaml                   # Helm values (committed)
 ├── ingressroute-dashboard.yaml   # IngressRoute serving the Traefik dashboard
 ├── ingressroute-lan-only.yaml    # fail-closed 403 for *.k3s.home from outside the inside networks
+├── ingressroute-public-redirect.yaml  # 301 HTTP→HTTPS for every *.lourenco.ch / *.21crypto.ch host
 └── middlewares/                  # cluster-wide Middleware/ServersTransport CRDs
     ├── README.md
     ├── nextcloud.yaml            # 4 mws: well-known-dav, well-known-rewrite, security-headers, cors
     ├── collabora-timeout.yaml    # ServersTransport: 600s timeouts for Collabora
     ├── paperless-body-64m.yaml   # 64 MiB request body buffer for Paperless uploads
-    └── redirect-https.yaml       # generic HTTP→HTTPS redirect (used by deltabadger, n8n)
+    └── redirect-https.yaml       # generic HTTP→HTTPS redirect (used by ingressroute-public-redirect.yaml)
 ```
 
 The `_live/` directory is a temporary `kubectl`/`helm get values` dump used
@@ -56,6 +58,7 @@ helm upgrade --install traefik traefik/traefik \
 # Apply the dashboard route, the *.k3s.home guard + middlewares
 kubectl apply -f ingressroute-dashboard.yaml
 kubectl apply -f ingressroute-lan-only.yaml
+kubectl apply -f ingressroute-public-redirect.yaml
 kubectl apply -f middlewares/
 ```
 
@@ -75,8 +78,7 @@ Live consumers today:
 
 | Ingress | Middlewares used |
 | --- | --- |
-| `deltabadger/deltabadger` | `traefik-redirect-https` |
-| `n8n/n8n` | `traefik-redirect-https` |
+| `deltabadger/deltabadger`, `n8n/n8n`, `ntfy/ntfy`, `dealwatch/dealwatch`, `vigie/vigie` | `traefik-redirect-https` (redundant since `ingressroute-public-redirect.yaml` covers every public host; harmless) |
 | `nextcloud/nextcloud` | `nextcloud-wellknown-dav`, `nextcloud-wellknown-rewrite`, `nextcloud-security-headers`, `nextcloud-cors` |
 | `paperless/paperless-ngx` | `paperless-body-limit-64m` |
 

@@ -1,0 +1,36 @@
+---
+# HTTP→HTTPS redirect for every public hostname, in one place.
+#
+# Ingresses without an entrypoint annotation are served on BOTH entrypoints, so
+# a public app that forgets the `redirect-https` middleware answers plain HTTP
+# on port 80 (nine of the public hosts did when this was written). The chart's
+# entrypoint-level redirect (`ports.web.http.redirections`) is NOT an option
+# here: it would also redirect the *.k3s.home services, which are HTTP-only
+# and have no certificate.
+#
+# This router matches the public zones on the `web` entrypoint only and
+# answers 301 to https://<same host><same path> through the shared
+# `redirect-https` middleware. Per-app routers on `web` have the default
+# priority (rule length, < 100), so this one outranks them; the *.k3s.home
+# guard (priority 100000) is disjoint by hostname. A new public Ingress is
+# covered the day it is created. ACME is DNS-01 everywhere, so nothing on
+# port 80 needs to stay plain.
+#
+# Per-Ingress `redirect-https` annotations still work and may stay; they are
+# simply redundant now.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: public-redirect-https
+  namespace: traefik
+spec:
+  entryPoints: [web]
+  routes:
+    - match: HostRegexp(`^([a-z0-9-]+\.)+(lourenco|21crypto)\.ch$`)
+      kind: Rule
+      priority: 90000
+      middlewares:
+        - name: redirect-https
+      services:
+        - name: noop@internal
+          kind: TraefikService
